@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>slideimp</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">slideimp</h1>
+
+
+
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(slideimp)</span></code></pre></div>
+<div id="choosing-between-k-nn-and-pca-imputation" class="section level2">
+<h2>Choosing between K-NN and PCA imputation</h2>
+<p>Let’s use the included <code>khanmiss1</code> dataset.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">data</span>(khanmiss1)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>obj <span class="ot">&lt;-</span> <span class="fu">t</span>(khanmiss1)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span></code></pre></div>
+<p>Instead of randomly placing <code>NA</code> values, we fix the
+locations of <code>NA</code> values in advance for cross-validation. We
+will select 30 random genes with 5 random missing values each and repeat
+10 times to compare the imputation accuracy between
+<code>knn_imp()</code> and <code>pca_imp()</code>. The
+<code>na_location</code> object is a list of 10 elements (one per
+repetition), where each element contains the 2D coordinates (row and
+column) of values that will be set to missing and then re-imputed by the
+K-NN/PCA imputation functions to calculate imputation metrics.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>n_genes <span class="ot">&lt;-</span> <span class="dv">30</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>n_reps <span class="ot">&lt;-</span> <span class="dv">10</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>na_location <span class="ot">&lt;-</span> <span class="fu">replicate</span>(</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="at">n =</span> n_reps,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  {</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>    chosen_genes <span class="ot">&lt;-</span> <span class="fu">sample.int</span>(<span class="fu">ncol</span>(obj), <span class="at">size =</span> n_genes)</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>    values <span class="ot">&lt;-</span> <span class="fu">lapply</span>(</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>      chosen_genes, \(x) {</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>        chosen_samples <span class="ot">&lt;-</span> <span class="fu">sample.int</span>(<span class="fu">nrow</span>(obj), <span class="at">size =</span> n_samples)</span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>        <span class="fu">matrix</span>(<span class="fu">c</span>(chosen_samples, <span class="fu">rep</span>(x, n_samples)), <span class="at">ncol =</span> <span class="dv">2</span>, <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="cn">NULL</span>, <span class="fu">c</span>(<span class="st">&quot;row&quot;</span>, <span class="st">&quot;col&quot;</span>)))</span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a>      }</span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a>    )</span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a>    <span class="fu">do.call</span>(rbind, values)</span>
+<span id="cb3-15"><a href="#cb3-15" tabindex="-1"></a>  },</span>
+<span id="cb3-16"><a href="#cb3-16" tabindex="-1"></a>  <span class="at">simplify =</span> <span class="cn">FALSE</span></span>
+<span id="cb3-17"><a href="#cb3-17" tabindex="-1"></a>)</span>
+<span id="cb3-18"><a href="#cb3-18" tabindex="-1"></a>na_location[[<span class="dv">1</span>]][<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, ]</span>
+<span id="cb3-19"><a href="#cb3-19" tabindex="-1"></a><span class="co">#&gt;       row  col</span></span>
+<span id="cb3-20"><a href="#cb3-20" tabindex="-1"></a><span class="co">#&gt;  [1,]  49 1004</span></span>
+<span id="cb3-21"><a href="#cb3-21" tabindex="-1"></a><span class="co">#&gt;  [2,]  29 1004</span></span>
+<span id="cb3-22"><a href="#cb3-22" tabindex="-1"></a><span class="co">#&gt;  [3,]  32 1004</span></span>
+<span id="cb3-23"><a href="#cb3-23" tabindex="-1"></a><span class="co">#&gt;  [4,]  63 1004</span></span>
+<span id="cb3-24"><a href="#cb3-24" tabindex="-1"></a><span class="co">#&gt;  [5,]  57 1004</span></span>
+<span id="cb3-25"><a href="#cb3-25" tabindex="-1"></a><span class="co">#&gt;  [6,]   8  623</span></span>
+<span id="cb3-26"><a href="#cb3-26" tabindex="-1"></a><span class="co">#&gt;  [7,]  26  623</span></span>
+<span id="cb3-27"><a href="#cb3-27" tabindex="-1"></a><span class="co">#&gt;  [8,]  17  623</span></span>
+<span id="cb3-28"><a href="#cb3-28" tabindex="-1"></a><span class="co">#&gt;  [9,]  59  623</span></span>
+<span id="cb3-29"><a href="#cb3-29" tabindex="-1"></a><span class="co">#&gt; [10,]  63  623</span></span></code></pre></div>
+<p>We proceed to measure the accuracy of the imputation using “good”
+default parameters for K-NN (<code>k = 10</code>) and PCA
+(<code>ncp = 5</code>). For PCA imputation, we leverage the
+<code>{mirai}</code> package for parallelization while the
+<code>cores</code> argument control parallelization for K-NN.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>tune_knn <span class="ot">&lt;-</span> <span class="fu">tune_imp</span>(obj, <span class="at">parameters =</span> <span class="fu">data.frame</span>(<span class="at">k =</span> <span class="dv">10</span>), <span class="at">rep =</span> na_location, <span class="at">cores =</span> <span class="dv">4</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="co">#&gt; Tuning knn_imp</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt; Step 1/2: Injecting NA</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt; Running in parallel...</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; Step 2/2: Tuning</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>tune_pca <span class="ot">&lt;-</span> <span class="fu">tune_imp</span>(obj, <span class="at">parameters =</span> <span class="fu">data.frame</span>(<span class="at">ncp =</span> <span class="dv">5</span>), <span class="at">rep =</span> na_location)</span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; Tuning pca_imp</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; Step 1/2: Injecting NA</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; Running in sequential...</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; Step 2/2: Tuning</span></span></code></pre></div>
+<p>In this case, PCA imputation performs better. Since the data only
+needs to be imputed once and the run time is so low, using PCA
+imputation for this dataset is preferable.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>rmse_knn <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">compute_metrics</span>(tune_knn, <span class="at">metrics =</span> <span class="st">&quot;rmse&quot;</span>)<span class="sc">$</span>.estimate)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>rmse_pca <span class="ot">&lt;-</span> <span class="fu">mean</span>(<span class="fu">compute_metrics</span>(tune_pca, <span class="at">metrics =</span> <span class="st">&quot;rmse&quot;</span>)<span class="sc">$</span>.estimate)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="fu">c</span>(<span class="st">&quot;knn&quot;</span> <span class="ot">=</span> rmse_knn, <span class="st">&quot;pca&quot;</span> <span class="ot">=</span> rmse_pca)</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co">#&gt;      knn      pca </span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; 489.4291 479.9477</span></span></code></pre></div>
+</div>
+<div id="subset-and-grouped-k-nn-and-pca-imputation" class="section level2">
+<h2>Subset and grouped K-NN and PCA imputation</h2>
+<p>Some DNA methylation analyses only focus on epigenetic clocks, which
+require only a subset of CpGs to be imputed. The <code>knn_imp()</code>
+function takes advantage of this to significantly reduce run time. To
+impute only specific CpGs for K-NN imputation and make use of grouped
+imputation we can use the <code>group_features()</code> function.</p>
+<p>Here, we simulate data where only a subset of CpGs are needed for
+imputation. PCA imputation does not benefit from subset imputation, but
+does benefit from grouped imputation.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># 500 features, 50 samples, 2 chromosomes</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>sim_obj <span class="ot">&lt;-</span> <span class="fu">sim_mat</span>(<span class="at">n =</span> <span class="dv">500</span>, <span class="at">m =</span> <span class="dv">50</span>, <span class="at">nchr =</span> <span class="dv">2</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="co"># sim_mat returns matrix with features in rows, so we use t() to put features in columns</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>obj <span class="ot">&lt;-</span> <span class="fu">t</span>(sim_obj<span class="sc">$</span>input)</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co"># `group_feature` contains metadata for the simulated data</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="fu">head</span>(sim_obj<span class="sc">$</span>group_feature)</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#&gt;   feature_id group</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt; 1      feat1  chr2</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; 2      feat2  chr2</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; 3      feat3  chr2</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; 4      feat4  chr2</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; 5      feat5  chr1</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; 6      feat6  chr1</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a>n_needed <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a><span class="co"># Randomly select CpGs that are needed for clock calculation</span></span>
+<span id="cb6-16"><a href="#cb6-16" tabindex="-1"></a>subset_cpgs <span class="ot">&lt;-</span> <span class="fu">sample</span>(<span class="fu">colnames</span>(obj), <span class="at">size =</span> n_needed)</span></code></pre></div>
+<p>We define the <code>features</code> list-column as a list of
+character vectors containing features to be imputed. Elements of the
+<code>features</code> list-column are subsets of the
+<code>subset_cpgs</code> character vector. These CpGs belong to either
+<code>chr1</code> or <code>chr2</code>, so we split them into two
+groups, resulting in two rows of the <code>group_df</code> tibble. The
+<code>aux</code> list-column now contains the remaining CpGs from either
+<code>chr1</code> or <code>chr2</code> that are not imputed themselves
+but are used to increase the accuracy of imputing the CpGs in the
+<code>features</code> list-column.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Construct the group data.frame with one row per group (i.e., chromosome)</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>group_df <span class="ot">&lt;-</span> <span class="fu">group_features</span>(obj, sim_obj<span class="sc">$</span>group_feature, <span class="at">subset =</span> subset_cpgs)</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>group_df</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co">#&gt; # A tibble: 2 × 3</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;   features   group aux        </span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt;   &lt;list&gt;     &lt;chr&gt; &lt;list&gt;     </span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt; 1 &lt;chr [41]&gt; chr1  &lt;chr [208]&gt;</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt; 2 &lt;chr [59]&gt; chr2  &lt;chr [192]&gt;</span></span></code></pre></div>
+<p>For demonstration purposes, we use the <code>parameters</code> column
+to add group-specific parameters. This can be useful if hyperparameters
+are tuned separately for each group, though this is typically not
+necessary. When <code>k</code> or <code>ncp</code> is too large for some
+groups, we can use the <code>parameters</code> column to specify
+group-specific <code>k</code> or <code>ncp</code> values. <code>k</code>
+and <code>ncp</code> can also be specified in
+<code>group_features()</code>.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>pca_group <span class="ot">&lt;-</span> group_df</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="co"># For PCA imputation, we use ncp = 5 for the first group and ncp = 10 for the second group</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>pca_group<span class="sc">$</span>parameters <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="fu">data.frame</span>(<span class="at">ncp =</span> <span class="dv">5</span>), <span class="fu">data.frame</span>(<span class="at">ncp =</span> <span class="dv">10</span>))</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co"># For K-NN imputation, we use k = 5 for both groups</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>knn_group <span class="ot">&lt;-</span> group_df</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>knn_group<span class="sc">$</span>parameters <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="fu">data.frame</span>(<span class="at">k =</span> <span class="dv">5</span>), <span class="fu">data.frame</span>(<span class="at">k =</span> <span class="dv">5</span>))</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a>pca_group</span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; # A tibble: 2 × 4</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt;   features   group aux         parameters  </span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt;   &lt;list&gt;     &lt;chr&gt; &lt;list&gt;      &lt;list&gt;      </span></span>
+<span id="cb8-12"><a href="#cb8-12" tabindex="-1"></a><span class="co">#&gt; 1 &lt;chr [41]&gt; chr1  &lt;chr [208]&gt; &lt;df [1 × 1]&gt;</span></span>
+<span id="cb8-13"><a href="#cb8-13" tabindex="-1"></a><span class="co">#&gt; 2 &lt;chr [59]&gt; chr2  &lt;chr [192]&gt; &lt;df [1 × 1]&gt;</span></span>
+<span id="cb8-14"><a href="#cb8-14" tabindex="-1"></a>knn_group</span>
+<span id="cb8-15"><a href="#cb8-15" tabindex="-1"></a><span class="co">#&gt; # A tibble: 2 × 4</span></span>
+<span id="cb8-16"><a href="#cb8-16" tabindex="-1"></a><span class="co">#&gt;   features   group aux         parameters  </span></span>
+<span id="cb8-17"><a href="#cb8-17" tabindex="-1"></a><span class="co">#&gt;   &lt;list&gt;     &lt;chr&gt; &lt;list&gt;      &lt;list&gt;      </span></span>
+<span id="cb8-18"><a href="#cb8-18" tabindex="-1"></a><span class="co">#&gt; 1 &lt;chr [41]&gt; chr1  &lt;chr [208]&gt; &lt;df [1 × 1]&gt;</span></span>
+<span id="cb8-19"><a href="#cb8-19" tabindex="-1"></a><span class="co">#&gt; 2 &lt;chr [59]&gt; chr2  &lt;chr [192]&gt; &lt;df [1 × 1]&gt;</span></span></code></pre></div>
+<p>K-NN subset imputation is very fast.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">system.time</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  knn_results <span class="ot">&lt;-</span> <span class="fu">group_imp</span>(obj, <span class="at">group =</span> knn_group, <span class="at">cores =</span> <span class="dv">4</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>)</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt; Performing group-wise KNN imputation with group-wise parameters.</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; Running in parallel...</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt;    user  system elapsed </span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt;       0       0       0</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="fu">system.time</span>(</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a>  pca_results <span class="ot">&lt;-</span> <span class="fu">group_imp</span>(obj, <span class="at">group =</span> pca_group)</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a>)</span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; Performing group-wise PCA imputation with group-wise parameters.</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;    user  system elapsed </span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;    0.11    0.00    0.10</span></span></code></pre></div>
+</div>
+<div id="sliding-window-k-nn-and-pca-imputation" class="section level2">
+<h2>Sliding Window K-NN and PCA imputation</h2>
+<p>We simulate the output of the <code>{methylKit}</code> package.
+<strong>Note:</strong> WGBS/EM-seq data should be grouped by chromosome
+before performing sliding window imputation.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>sample_names <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;S&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>positions <span class="ot">&lt;-</span> <span class="dv">500</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>methyl <span class="ot">&lt;-</span> tibble<span class="sc">::</span><span class="fu">tibble</span>(</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="at">chr =</span> <span class="st">&quot;chr1&quot;</span>,</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="at">start =</span> <span class="fu">seq_len</span>(positions),</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>  <span class="at">end =</span> start,</span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>  <span class="at">strand =</span> <span class="st">&quot;+&quot;</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>)</span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_along</span>(sample_names)) {</span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>  methyl[[<span class="fu">paste0</span>(<span class="st">&quot;numCs&quot;</span>, i)]] <span class="ot">&lt;-</span> <span class="fu">sample.int</span>(<span class="dv">100</span>, <span class="at">size =</span> positions, <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a>  methyl[[<span class="fu">paste0</span>(<span class="st">&quot;numTs&quot;</span>, i)]] <span class="ot">&lt;-</span> <span class="fu">sample.int</span>(<span class="dv">100</span>, <span class="at">size =</span> positions, <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a>  methyl[[<span class="fu">paste0</span>(<span class="st">&quot;coverage&quot;</span>, i)]] <span class="ot">&lt;-</span> methyl[[<span class="fu">paste0</span>(<span class="st">&quot;numCs&quot;</span>, i)]] <span class="sc">+</span> methyl[[<span class="fu">paste0</span>(<span class="st">&quot;numTs&quot;</span>, i)]]</span>
+<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a>}</span>
+<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a>methyl[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>]</span>
+<span id="cb10-19"><a href="#cb10-19" tabindex="-1"></a><span class="co">#&gt; # A tibble: 5 × 10</span></span>
+<span id="cb10-20"><a href="#cb10-20" tabindex="-1"></a><span class="co">#&gt;   chr   start   end strand numCs1 numTs1 coverage1 numCs2 numTs2 coverage2</span></span>
+<span id="cb10-21"><a href="#cb10-21" tabindex="-1"></a><span class="co">#&gt;   &lt;chr&gt; &lt;int&gt; &lt;int&gt; &lt;chr&gt;   &lt;int&gt;  &lt;int&gt;     &lt;int&gt;  &lt;int&gt;  &lt;int&gt;     &lt;int&gt;</span></span>
+<span id="cb10-22"><a href="#cb10-22" tabindex="-1"></a><span class="co">#&gt; 1 chr1      1     1 +          28     18        46     78     20        98</span></span>
+<span id="cb10-23"><a href="#cb10-23" tabindex="-1"></a><span class="co">#&gt; 2 chr1      2     2 +          80     25       105     47     95       142</span></span>
+<span id="cb10-24"><a href="#cb10-24" tabindex="-1"></a><span class="co">#&gt; 3 chr1      3     3 +          22     85       107     48     99       147</span></span>
+<span id="cb10-25"><a href="#cb10-25" tabindex="-1"></a><span class="co">#&gt; 4 chr1      4     4 +           9     22        31     74     37       111</span></span>
+<span id="cb10-26"><a href="#cb10-26" tabindex="-1"></a><span class="co">#&gt; 5 chr1      5     5 +           5     54        59     71     92       163</span></span></code></pre></div>
+<p>First, we convert the data into a beta matrix with features in the
+columns. <strong>Important:</strong> We sort the <code>methyl</code>
+object by position and name the CpGs by their genomic position. This is
+important because <code>slide_imp</code> imputes the beta matrix
+column-wise in windows so the order of the column has to be
+meaningful.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>methyl <span class="ot">&lt;-</span> methyl[<span class="fu">order</span>(methyl<span class="sc">$</span>start), ] <span class="co"># &lt;---- Important, sort!</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>numCs_matrix <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(methyl[, <span class="fu">paste0</span>(<span class="st">&quot;numCs&quot;</span>, <span class="fu">seq_along</span>(sample_names))])</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>cov_matrix <span class="ot">&lt;-</span> <span class="fu">as.matrix</span>(methyl[, <span class="fu">paste0</span>(<span class="st">&quot;coverage&quot;</span>, <span class="fu">seq_along</span>(sample_names))])</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>beta_matrix <span class="ot">&lt;-</span> numCs_matrix <span class="sc">/</span> cov_matrix</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="fu">colnames</span>(beta_matrix) <span class="ot">&lt;-</span> sample_names</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="fu">rownames</span>(beta_matrix) <span class="ot">&lt;-</span> methyl<span class="sc">$</span>start</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>beta_matrix <span class="ot">&lt;-</span> <span class="fu">t</span>(beta_matrix)</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co"># Set 10% of the data to missing</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1234</span>)</span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a>beta_matrix[<span class="fu">sample.int</span>(<span class="fu">length</span>(beta_matrix), <span class="fu">floor</span>(<span class="fu">length</span>(beta_matrix) <span class="sc">*</span> <span class="fl">0.1</span>))] <span class="ot">&lt;-</span> <span class="cn">NA</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a>beta_matrix[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>]</span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co">#&gt;            1          2         3         4         5</span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt; S1 0.6086957         NA 0.2056075 0.2903226        NA</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co">#&gt; S2 0.7959184 0.33098592 0.3265306 0.6666667 0.4355828</span></span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a><span class="co">#&gt; S3 0.6396396         NA        NA 0.7875000 0.4895833</span></span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a><span class="co">#&gt; S4 0.8863636 0.51111111 0.3211679 0.5000000 0.9479167</span></span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a><span class="co">#&gt; S5 0.7339450 0.06666667 0.2580645 0.1596639 0.6500000</span></span></code></pre></div>
+<p>This example dataset is small, but in actual analyses with millions
+of CpGs, we can tune the K-NN or PCA imputation on just the first tens
+of thousands of CpGs. Here, we perform K-NN imputation by specifying
+<code>k</code>, a window size (<code>n_feat</code>) of 100, and a 10-CpG
+overlap (<code>n_overlap</code>) between windows.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="co"># For example, we are tuning `k` value here.</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>slide_knn_params <span class="ot">&lt;-</span> tibble<span class="sc">::</span><span class="fu">tibble</span>(<span class="at">k =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>), <span class="at">n_feat =</span> <span class="dv">100</span>, <span class="at">n_overlap =</span> <span class="dv">10</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="co"># Increase rep from 2 in actual analyses</span></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>tune_slide_knn <span class="ot">&lt;-</span> <span class="fu">tune_imp</span>(</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  <span class="at">obj =</span> beta_matrix,</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="at">parameters =</span> slide_knn_params,</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>  <span class="at">rep =</span> <span class="dv">2</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>)</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="co">#&gt; Tuning slide_imp</span></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="co">#&gt; Step 1/2: Injecting NA</span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="co">#&gt; Running in parallel...</span></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="co">#&gt; Step 2/2: Tuning</span></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="fu">compute_metrics</span>(tune_slide_knn)</span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="co">#&gt; # A tibble: 12 × 10</span></span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="co">#&gt;        k n_feat n_overlap .progress cores param_set   rep .metric .estimator</span></span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a><span class="co">#&gt;    &lt;dbl&gt;  &lt;dbl&gt;     &lt;dbl&gt; &lt;lgl&gt;     &lt;dbl&gt;     &lt;int&gt; &lt;int&gt; &lt;chr&gt;   &lt;chr&gt;     </span></span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a><span class="co">#&gt;  1    10    100        10 FALSE         4         1     1 mae     standard  </span></span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a><span class="co">#&gt;  2    10    100        10 FALSE         4         1     1 rmse    standard  </span></span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a><span class="co">#&gt;  3    10    100        10 FALSE         4         1     1 rsq     standard  </span></span>
+<span id="cb12-21"><a href="#cb12-21" tabindex="-1"></a><span class="co">#&gt;  4    20    100        10 FALSE         4         2     1 mae     standard  </span></span>
+<span id="cb12-22"><a href="#cb12-22" tabindex="-1"></a><span class="co">#&gt;  5    20    100        10 FALSE         4         2     1 rmse    standard  </span></span>
+<span id="cb12-23"><a href="#cb12-23" tabindex="-1"></a><span class="co">#&gt;  6    20    100        10 FALSE         4         2     1 rsq     standard  </span></span>
+<span id="cb12-24"><a href="#cb12-24" tabindex="-1"></a><span class="co">#&gt;  7    10    100        10 FALSE         4         1     2 mae     standard  </span></span>
+<span id="cb12-25"><a href="#cb12-25" tabindex="-1"></a><span class="co">#&gt;  8    10    100        10 FALSE         4         1     2 rmse    standard  </span></span>
+<span id="cb12-26"><a href="#cb12-26" tabindex="-1"></a><span class="co">#&gt;  9    10    100        10 FALSE         4         1     2 rsq     standard  </span></span>
+<span id="cb12-27"><a href="#cb12-27" tabindex="-1"></a><span class="co">#&gt; 10    20    100        10 FALSE         4         2     2 mae     standard  </span></span>
+<span id="cb12-28"><a href="#cb12-28" tabindex="-1"></a><span class="co">#&gt; 11    20    100        10 FALSE         4         2     2 rmse    standard  </span></span>
+<span id="cb12-29"><a href="#cb12-29" tabindex="-1"></a><span class="co">#&gt; 12    20    100        10 FALSE         4         2     2 rsq     standard  </span></span>
+<span id="cb12-30"><a href="#cb12-30" tabindex="-1"></a><span class="co">#&gt; # ℹ 1 more variable: .estimate &lt;dbl&gt;</span></span></code></pre></div>
+<p>Finally, we can use <code>slide_imp()</code> to impute the
+<code>beta_matrix</code>.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>imputed_beta <span class="ot">&lt;-</span> <span class="fu">slide_imp</span>(<span class="at">obj =</span> beta_matrix, <span class="at">n_feat =</span> <span class="dv">100</span>, <span class="at">n_overlap =</span> <span class="dv">10</span>, <span class="at">k =</span> <span class="dv">10</span>, <span class="at">cores =</span> <span class="dv">4</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="co">#&gt; Step 1/2: Imputing</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a><span class="co">#&gt;  Processing window 1 of 5</span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="co">#&gt;  Processing window 2 of 5</span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="co">#&gt;  Processing window 3 of 5</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt;  Processing window 4 of 5</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt;  Processing window 5 of 5</span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt; Step 2/2: Averaging overlapping regions</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; Post-imputation: filling remaining NAs with column means</span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a>imputed_beta</span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; ImputedMatrix (KNN)</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="co">#&gt; Dimensions: 10 x 500</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="co">#&gt;            1          2         3         4         5</span></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="co">#&gt; S1 0.6086957 0.37449497 0.2056075 0.2903226 0.4579225</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="co">#&gt; S2 0.7959184 0.33098592 0.3265306 0.6666667 0.4355828</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt; S3 0.6396396 0.55105585 0.5863953 0.7875000 0.4895833</span></span>
+<span id="cb13-18"><a href="#cb13-18" tabindex="-1"></a><span class="co">#&gt; S4 0.8863636 0.51111111 0.3211679 0.5000000 0.9479167</span></span>
+<span id="cb13-19"><a href="#cb13-19" tabindex="-1"></a><span class="co">#&gt; S5 0.7339450 0.06666667 0.2580645 0.1596639 0.6500000</span></span>
+<span id="cb13-20"><a href="#cb13-20" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb13-21"><a href="#cb13-21" tabindex="-1"></a><span class="co">#&gt; # Showing [1:5, 1:5] of full matrix</span></span></code></pre></div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
