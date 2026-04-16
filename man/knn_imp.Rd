@@ -13,70 +13,90 @@ knn_imp(
   post_imp = TRUE,
   subset = NULL,
   dist_pow = 0,
-  tree = NULL
+  tree = FALSE,
+  max_cache = 4,
+  na_check = TRUE
 )
 }
 \arguments{
 \item{obj}{A numeric matrix with \strong{samples in rows} and \strong{features in columns}.}
 
-\item{k}{Number of nearest neighbors for imputation. 10 is a good starting point.}
+\item{k}{Integer. Number of nearest neighbors for imputation. 10 is a good
+starting point.}
 
-\item{colmax}{A number from 0 to 1. Threshold of missing data above which K-NN imputation is skipped.}
+\item{colmax}{Numeric. A number from 0 to 1. Threshold of column-wise missing
+data rate above which imputation is skipped.}
 
-\item{method}{Either "euclidean" (default) or "manhattan". Distance metric for nearest neighbor calculation.}
+\item{method}{Character. Either "euclidean" (default) or "manhattan".
+Distance metric for nearest neighbor calculation.}
 
-\item{cores}{Number of cores to parallelize over.}
+\item{cores}{Integer. Number of cores for K-NN parallelization (OpenMP). On
+macOS, OpenMP may need additional compiler configuration.}
 
-\item{post_imp}{Whether to impute remaining missing values (those that failed K-NN imputation)
-using column means (default = \code{TRUE}).}
+\item{post_imp}{Boolean. Whether to impute remaining missing values (those
+that failed imputation) using column means.}
 
-\item{subset}{Character vector of column names or integer vector of column
+\item{subset}{Character. Vector of column names or integer vector of column
 indices specifying which columns to impute.}
 
-\item{dist_pow}{The amount of penalization for further away nearest neighbors in the weighted average.
-\code{dist_pow = 0} (default) is the simple average of the nearest neighbors.}
+\item{dist_pow}{Numeric. The amount of penalization for further away nearest
+neighbors in the weighted average. \code{dist_pow = 0} (default) is the simple
+average of the nearest neighbors.}
 
-\item{tree}{Either \code{NULL} (default, brute-force K-NN), "ball", or "kd" to find nearest neighbors using the \code{{mlpack}} ball-tree or kd-tree algorithms.}
+\item{tree}{Logical. \code{FALSE} (default) uses brute-force K-NN. \code{TRUE} uses
+\code{mlpack} BallTree.}
+
+\item{max_cache}{Numeric. Maximum allowed cache size in GB (default \code{4}).
+When greater than \code{0}, pairwise distances between columns with missing values
+are pre-computed and cached, which is faster for moderate-sized data but
+uses O(m^2) memory where m is the number of columns with missing values.
+Set to \code{0} to disable caching and trade speed for lower memory usage.}
+
+\item{na_check}{Boolean. Check for leftover \code{NA} values in the results or not
+(internal use).}
 }
 \value{
-A numeric matrix of the same dimensions as \code{obj} with missing values imputed.
+A numeric matrix of the same dimensions as \code{obj} with missing
+values imputed.
 }
 \description{
-Imputes missing values in numeric matrices using full k-nearest neighbor imputation.
+Impute missing values in a numeric matrix using k-nearest neighbors (K-NN).
 }
 \details{
-This function performs \strong{column-wise} nearest neighbor imputation.
+This function performs imputation \strong{column-wise} (using rows as
+observations).
 
-When \code{dist_pow > 0}, imputed values are computed as distance-weighted averages
-where weights are inverse distances raised to the power of \code{dist_pow}.
+When \code{dist_pow > 0}, imputed values are computed as distance-weighted
+averages where weights are inverse distances raised to the power of
+\code{dist_pow}.
 
-The \code{tree} parameter enables faster neighbor search using spatial data structures
-but requires pre-filling missing values with column means, which may introduce bias
-in high-missingness data. Tree construction overhead may reduce performance for
-low-dimensional data.
+The \code{tree} parameter (when \code{TRUE}) uses a BallTree for faster neighbor search
+via \code{{mlpack}} but \strong{requires pre-filling} missing values with column means.
+This can introduce a small bias when missingness is high.
 }
 \section{Performance Optimization}{
 
 \itemize{
-\item \strong{Tree methods}: Only use when imputation runtime becomes prohibitive and
-missingness is low (<5\% missing)
-\item \strong{Subset imputation}: Use \code{subset} parameter for efficiency when only
-specific columns need imputation (e.g., epigenetic clocks CpGs)
+\item \strong{\code{tree = FALSE}} (default, brute-force K-NN): Always safe and usually
+faster for small to moderate data or high-dimensional cases.
+\item \strong{\code{tree = TRUE}} (BallTree K-NN): Only use when imputation run time
+becomes prohibitive and missingness is low (<5\% missing).
+\item \strong{Subset imputation}: Use the \code{subset} parameter for efficiency when only
+specific columns need imputation (e.g., epigenetic clock CpGs).
 }
 }
 
 \examples{
-data(khanmiss1)
-sum(is.na(khanmiss1))
-
-# Basic K-NN imputation (khanmiss1 has genes in rows, so transpose)
-t_khanmiss1 <- t(khanmiss1)
-result <- knn_imp(t_khanmiss1, k = 5)
+# Basic K-NN imputation
+obj <- sim_mat(20, 20, perc_col_na = 1)$input
+sum(is.na(obj))
+result <- knn_imp(obj, k = 10)
 result
 
 }
 \references{
-Robert Tibshirani, Trevor Hastie, Balasubramanian Narasimhan, and Gilbert Chu (2002).
-Diagnosis of multiple cancer types by shrunken centroids of gene expression
-PNAS 99: 6567-6572. Available at www.pnas.org
+Troyanskaya O, Cantor M, Sherlock G, Brown P, Hastie T, Tibshirani R,
+Botstein D, Altman RB (2001).
+Missing value estimation methods for DNA microarrays.
+Bioinformatics 17(6): 520-525.
 }
