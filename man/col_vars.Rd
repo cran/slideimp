@@ -2,31 +2,37 @@
 % Please edit documentation in R/col_vars.R
 \name{col_vars}
 \alias{col_vars}
-\title{Calculate Matrix Column Variance}
+\title{Calculate Matrix Column Variances}
 \usage{
-col_vars(mat, cores = 1)
+col_vars(obj, cores = 1)
 }
 \arguments{
-\item{mat}{A numeric matrix.}
+\item{obj}{A numeric matrix.}
 
-\item{cores}{Number of cores to use for parallel computation. Defaults to 1.}
+\item{cores}{Integer. Number of cores to use for parallel computation.
+Defaults to \code{1}.}
 }
 \value{
-\code{col_vars} returns a named numeric vector of column variances.
+A numeric vector of column variances, named if \code{obj} has column
+names.
 }
 \description{
-\code{col_vars} computes the sample variance for each column of a numeric matrix.
+Compute the sample variance for each column of a numeric matrix.
 }
 \details{
-Variances for columns with one unique value after dropping \code{NA} are set to \code{NA}.
+Columns with fewer than two non-missing values are assigned \code{NA}.
 }
 \examples{
-mat <- matrix(rnorm(4 * 10), ncol = 4)
-mat[1, 1] <- NA
-mat[1:8, 2] <- NA
-mat[1:9, 3] <- NA
-mat[, 4] <- NA
-mat
-col_vars(mat)
-apply(mat, 2, var, na.rm = TRUE)
+set.seed(123)
+obj <- matrix(rnorm(5 * 10), ncol = 5)
+obj[1, 1] <- NA
+obj[1:8, 2] <- NA
+obj[1:8, 3] <- NA
+obj[9, 3] <- obj[10, 3]
+obj[1:9, 4] <- NA
+obj[, 5] <- NA
+obj
+
+col_vars(obj)
+apply(obj, 2, var, na.rm = TRUE)
 }

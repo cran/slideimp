@@ -1,34 +1,40 @@
-#' Calculate Matrix Column Variance
+#' Calculate Matrix Column Variances
 #'
-#' `col_vars` computes the sample variance for each column of a numeric matrix.
+#' Compute the sample variance for each column of a numeric matrix.
 #'
-#' @param mat A numeric matrix.
-#' @param cores Number of cores to use for parallel computation. Defaults to 1.
+#' @param obj A numeric matrix.
+#' @param cores Integer. Number of cores to use for parallel computation.
+#'   Defaults to `1`.
 #'
 #' @details
-#' Variances for columns with one unique value after dropping `NA` are set to `NA`.
+#' Columns with fewer than two non-missing values are assigned `NA`.
 #'
-#' @returns `col_vars` returns a named numeric vector of column variances.
+#' @returns A numeric vector of column variances, named if `obj` has column
+#'   names.
 #'
 #' @export
 #'
 #' @examples
-#' mat <- matrix(rnorm(4 * 10), ncol = 4)
-#' mat[1, 1] <- NA
-#' mat[1:8, 2] <- NA
-#' mat[1:9, 3] <- NA
-#' mat[, 4] <- NA
-#' mat
-#' col_vars(mat)
-#' apply(mat, 2, var, na.rm = TRUE)
-col_vars <- function(mat, cores = 1) {
+#' set.seed(123)
+#' obj <- matrix(rnorm(5 * 10), ncol = 5)
+#' obj[1, 1] <- NA
+#' obj[1:8, 2] <- NA
+#' obj[1:8, 3] <- NA
+#' obj[9, 3] <- obj[10, 3]
+#' obj[1:9, 4] <- NA
+#' obj[, 5] <- NA
+#' obj
+#'
+#' col_vars(obj)
+#' apply(obj, 2, var, na.rm = TRUE)
+col_vars <- function(obj, cores = 1) {
   checkmate::assert_matrix(
-    mat,
-    mode = "numeric", null.ok = FALSE, min.rows = 1, min.cols = 1, .var.name = "mat"
+    obj,
+    mode = "numeric", null.ok = FALSE, min.rows = 1, min.cols = 1, .var.name = "obj"
   )
   checkmate::assert_int(cores, lower = 1)
-  vars <- col_vars_internal(mat = mat, cores = cores)[1, ]
+  vars <- col_vars_internal(mat = obj, cores = cores)[1, ]
   vars[is.nan(vars)] <- NA
-  names(vars) <- colnames(mat)
+  names(vars) <- colnames(obj)
   return(vars)
 }

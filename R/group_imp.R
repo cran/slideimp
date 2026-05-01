@@ -1,3 +1,41 @@
+#' Resolve a Group Specification to a Data Frame
+#'
+#' Convert a group specification to the canonical data-frame form expected by
+#' [prep_groups()]. This S3 generic is exported so that extension packages,
+#' such as `slideimp.extra`, can register additional methods.
+#'
+#' @param x A group specification. `slideimp` provides a method for
+#'   `data.frame` objects. The optional `slideimp.extra` package provides a
+#'   method for character platform names.
+#'
+#' @examples
+#' df <- data.frame(feature = c("cg1", "cg2"), group = c(1, 1))
+#' slideimp_resolve_group(df)
+#'
+#' @note
+#' This is primarily an extension hook for `slideimp.extra`.
+#'
+#' @export
+slideimp_resolve_group <- function(x) {
+  UseMethod("slideimp_resolve_group")
+}
+
+#' @rdname slideimp_resolve_group
+#' @export
+slideimp_resolve_group.data.frame <- function(x) {
+  unique(x)
+}
+
+#' @rdname slideimp_resolve_group
+#' @export
+slideimp_resolve_group.default <- function(x) {
+  cli::cli_abort(c(
+    "No {.fun slideimp_resolve_group} method for objects of class {.cls {class(x)[1]}}.",
+    "i" = "Install and load {.pkg slideimp.extra} to enable character-based group lookup.",
+    ">" = "See the {.pkg slideimp} README for installation instructions."
+  ))
+}
+
 #' Remove Features from Auxiliary Columns
 #'
 #' Performs a fast, grouped set-difference using `collapse`. For each group
@@ -105,34 +143,44 @@ group_indices <- function(g, feat_splits, aux_splits, prep_groups) {
 #' Prepare Groups for Imputation
 #'
 #' Normalize and validate a grouping specification for use with [group_imp()].
-#' Converts long-format or canonical list-column input into a validated
-#' `slideimp_tbl`, enforcing set relationships, pruning dropped columns,
-#' and optionally padding small groups.
 #'
+#' `prep_groups()` converts long-format or list-column group specifications
+#' into a validated `slideimp_tbl`, enforces feature and auxiliary-column set
+#' relationships, prunes dropped columns, and optionally pads small groups.
+#'
+#' @param obj_cn Character vector of column names from the data matrix, usually
+#'   `colnames(obj)`.
 #' @inheritParams group_imp
-#'
-#' @param obj_cn Character vector of column names from the data matrix
-#' (e.g., `colnames(obj)`). Every element must appear in `group$feature` unless
-#' `allow_unmapped = TRUE`.
+#' @param min_group_size Integer or `NULL`. Minimum total number of columns
+#'   per group, counting both features and auxiliary columns. Groups smaller
+#'   than this are padded with randomly sampled columns from `obj_cn`. If
+#'   `NULL` or `0`, no padding is performed.
+#' @param seed Integer, numeric, or `NULL`. Random seed used when padding small
+#'   groups.
 #'
 #' @details
-#' ### Set Validation
-#' Let \eqn{A} = `obj_cn` and \eqn{B} = the union of all feature and auxiliary
-#' names in `group`. The function enforces \eqn{A \subseteq B}: every column in
-#' the matrix must appear somewhere in the manifest.
+#' Let \eqn{A} be `obj_cn` and \eqn{B} be the union of all feature and
+#' auxiliary names in `group`. When `allow_unmapped = FALSE`, the function
+#' enforces \eqn{A \subseteq B}: every matrix column must appear somewhere in
+#' the grouping specification.
 #'
-#' * `Pruning:` Elements in \eqn{B} but not in \eqn{A} (e.g., QC-dropped probes)
-#'   are silently pruned from each group.
-#' * `Dropping:` Groups left with zero features after pruning are
-#'   removed entirely with a diagnostic message.
+#' Elements in \eqn{B} but not in \eqn{A}, such as previously dropped probes,
+#' are pruned from each group. Groups left with zero features after pruning
+#' are removed with a diagnostic message.
 #'
-#' @returns A `data.frame` of class `slideimp_tbl` containing:
-#' * `group`: Original group labels (if provided) or sequential group labels.
-#' * `feature`: A list-column of character vectors (feature names).
-#' * `aux`: A list-column of character vectors (auxiliary names).
-#' * `parameters`: A list-column of per-group configuration lists.
+#' @returns A data frame of class `slideimp_tbl` containing:
+#' * `group`: original group labels, if provided, or sequential group labels.
+#' * `feature`: a list-column of character vectors containing feature names.
+#' * `aux`: a list-column of character vectors containing auxiliary names.
+#' * `parameters`: a list-column of per-group configuration lists.
 #'
 #' @seealso [group_imp()]
+#'
+#' @examples
+#' sim <- sim_mat(n = 10, p = 20)
+#' prepped <- prep_groups(colnames(sim$input), sim$col_group)
+#' prepped
+#'
 #' @export
 prep_groups <- function(
   obj_cn,
@@ -149,21 +197,8 @@ prep_groups <- function(
     min.len = 1, unique = TRUE,
     any.missing = FALSE, .var.name = "obj_cn"
   )
-  if (is.character(group)) {
-    if (is.null(.slideimp_env$group_resolver)) {
-      cli::cli_abort(
-        c(
-          "Received a character value for {.arg group}, but no manifest provider is registered.",
-          "i" = "Install and load {.pkg slideimp.extra} to enable character-based group lookup.",
-          ">" = "See the {.pkg slideimp} README for installation instructions."
-        )
-      )
-    }
-    group <- .slideimp_env$group_resolver(group)
-  } else {
-    checkmate::assert_data_frame(group, min.rows = 1, .var.name = "group")
-    group <- unique(group)
-  }
+  group <- slideimp_resolve_group(group)
+  checkmate::assert_data_frame(group, min.rows = 1, .var.name = "group")
   checkmate::assert_names(
     colnames(group),
     must.include = "feature", .var.name = "group"
@@ -178,24 +213,28 @@ prep_groups <- function(
 
   # Step 1: Normalize input format ----
   if ("group" %in% names(group) && inherits(group$feature, "character")) {
-    stopifnot("`NA` is not allowed in `group$group`" = !anyNA(group$group))
+    if (anyNA(group$group)) {
+      cli::cli_abort("{.code NA} is not allowed in {.code group$group}.")
+    }
+
     checkmate::assert_character(
       group$feature,
       any.missing = FALSE, unique = TRUE,
       .var.name = "group$feature"
     )
+
     if (is.numeric(group$group) && !checkmate::test_integerish(group$group)) {
-      warning(
-        "Non-integer numeric 'group$group' values detected. ",
-        "The `group` column is used to group the features in the `feature` ",
-        "column. Did you mean to use integer or character labels?"
-      )
+      cli::cli_warn(c(
+        "Non-integer numeric {.code group$group} values detected.",
+        "i" = "The {.field group} column is used to group the features in the {.field feature} column.",
+        "i" = "Did you mean to use integer or character labels?"
+      ))
     }
+
     group <- collapse::fsummarize(
       collapse::fgroup_by(group, group),
       feature = list(feature)
     )
-    # group$group <- NULL
   } else if (inherits(group$feature, "character")) {
     cli::cli_abort(c(
       "{.arg group} has a character {.field feature} column but no {.field group} column.",
@@ -210,7 +249,7 @@ prep_groups <- function(
     unique = TRUE, .var.name = "group$feature"
   )
 
-  # Normalize aux — always present as a list of character vectors
+  # Normalize aux - always present as a list of character vectors
   if ("aux" %in% names(group)) {
     checkmate::assert_list(
       group$aux,
@@ -224,7 +263,7 @@ prep_groups <- function(
     group$aux <- replicate(nrow(group), character(0), simplify = FALSE)
   }
 
-  # Normalize parameters — always present as a list of lists
+  # Normalize parameters - always present as a list of lists
   if ("parameters" %in% names(group)) {
     checkmate::assert_list(
       group$parameters,
@@ -253,10 +292,9 @@ prep_groups <- function(
         "i" = "If you are sure {.arg group} is correct and want to leave these columns untouched, set {.code allow_unmapped = TRUE}."
       ))
     } else {
-      message(paste0(
-        length(not_in_B), " column(s) in `obj` have no matching entry in `group` ",
-        "and will be left untouched: ",
-        fmt_trunc(not_in_B), "."
+      cli::cli_inform(c(
+        "!" = "{length(not_in_B)} column{?s} in {.arg obj} {?has/have} no matching entry in {.arg group} and will be left untouched.",
+        "i" = "{fmt_trunc(not_in_B)}"
       ))
     }
   }
@@ -279,10 +317,13 @@ prep_groups <- function(
   # Step 3: Prune empty groups ----
   empty <- lengths(group$feature) == 0L
   if (any(empty)) {
-    message(
-      "Groups ", paste(which(empty), collapse = ", "),
-      " dropped: no features remaining after matching obj columns."
-    )
+    dropped <- which(empty)
+
+    cli::cli_inform(c(
+      "!" = "{length(dropped)} group{?s} dropped: no features remaining after matching {.arg obj_cn}.",
+      "i" = "Dropped group indices: {paste(dropped, collapse = ', ')}"
+    ))
+
     group <- group[!empty, , drop = FALSE]
     rownames(group) <- NULL
   }
@@ -323,10 +364,13 @@ prep_groups <- function(
       cli::cli_abort("No groups have features to impute after applying {.arg subset}.")
     }
     if (any(!keep)) {
-      message(
-        "Groups ", paste(which(!keep), collapse = ", "),
-        " dropped: no features remaining after applying subset."
-      )
+      dropped <- which(!keep)
+
+      cli::cli_inform(c(
+        "!" = "{length(dropped)} group{?s} dropped: no features remaining after applying {.arg subset}.",
+        "i" = "Dropped group indices: {paste(dropped, collapse = ', ')}"
+      ))
+
       group <- group[keep, , drop = FALSE]
       rownames(group) <- NULL
     }
@@ -370,137 +414,130 @@ prep_groups <- function(
 
 #' Grouped K-NN or PCA Imputation
 #'
-#' Perform K-NN or PCA imputation independently on feature groups
-#' (e.g., by chromosomes, flanking probes, or clustering-based groups).
+#' Perform K-NN or PCA imputation independently within feature groups.
 #'
-#' @inheritParams slide_imp
 #' @inheritParams knn_imp
 #' @inheritParams pca_imp
 #'
-#' @param group Specification of how features should be grouped for
-#' imputation. Accepts three formats:
+#' @param group Specification of how features should be grouped for imputation.
+#'   Accepted formats are:
 #'
-#'  * `character`: string naming a supported Illumina platform; see the Note
-#' section.
-#'  * `data.frame` (Long format):
-#'    * `group`: Column identifying the group for each feature.
-#'    * `feature`: Character column of individual feature names.
-#'  * `data.frame` (List-column format):
-#'    * `feature`: List-column of character vectors to impute. A row is a group.
-#'    * `aux`: (Optional) List-column of auxiliary names used for
-#'    context.
-#'    * `parameters`: (Optional) List-column of group-specific
-#'    parameter lists.
+#'   * A character scalar naming a supported Illumina platform; see Note.
+#'   * A long-format `data.frame` with columns `group` and `feature`.
+#'   * A list-column `data.frame` with a `feature` list-column. Optional
+#'     list-columns are `aux`, for auxiliary feature names, and `parameters`,
+#'     for group-specific parameter lists.
 #'
-#' @param subset Character vector of feature names to impute (default
-#' `NULL` means impute all features). Must be a subset of `obj_cn`
-#' (`colnames(obj)`) and must appear in at least one group's
-#' `feature`. Features in a group but not in `subset` are demoted to
-#' auxiliary columns for that group. Groups left with zero features
-#' after demotion are dropped with a message.
-#'
-#' @param allow_unmapped Logical. If `FALSE`, every column in
-#' `colnames(obj)` must appear in `group`. If `TRUE`, columns with
-#' no group assignment are left untouched (neither imputed nor used
-#' as auxiliary columns) and a message is issued instead of an error.
-#'
-#' @param min_group_size Integer or `NULL`. Minimum column count
-#' (features + aux) per group. Groups smaller than this are padded
-#' with randomly sampled columns from `obj`. Passed to [prep_groups()]
-#' internally.
-#'
-#' @param cores The number of OpenMP cores for K-NN imputation
-#' **only**. For PCA or mirai-based parallelism, use
-#' `mirai::daemons()` instead.
-#'
-#' @param .progress Show imputation progress (default `TRUE`).
-#'
-#' @param seed Numeric or `NULL`. Random seed for reproducibility.
-#'
-#' @param on_infeasible Character, one of `"error"` (default on
-#' `group_imp()`), `"skip"`, or `"mean"` (default on `slide_imp()`).
-#' Controls behaviour when a group is infeasible for imputation,
-#' e.g., `k`/`ncp` exceeds the number of usable columns after
-#' applying `colmax`, or all subset columns in the group exceed
-#' `colmax`.
-#'
-#' @param pin_blas Logical. If `TRUE`, pin BLAS threads to 1 to
-#' reduce contention when using parallel PCA on systems linked with
-#' multi-threaded BLAS.
+#' @param subset Optional character vector of feature names to impute. If
+#'   `NULL`, all grouped features are imputed. Features in a group but not in
+#'   `subset` are demoted to auxiliary columns for that group. Groups left with
+#'   zero features after demotion are dropped with a message.
+#' @param allow_unmapped Logical. If `FALSE`, every column in `colnames(obj)`
+#'   must appear in `group`. If `TRUE`, columns with no group assignment are
+#'   left untouched and are not used as auxiliary columns.
+#' @param k Integer or `NULL`. Number of nearest neighbors for K-NN imputation.
+#'   If `NULL`, `k` may be supplied through `group$parameters`.
+#' @param ncp Integer or `NULL`. Number of components for PCA imputation. If
+#'   `NULL`, `ncp` may be supplied through `group$parameters`.
+#' @param method Character or `NULL`. For K-NN imputation, one of
+#'   `"euclidean"` or `"manhattan"`. For PCA imputation, one of
+#'   `"regularized"` or `"EM"`. If `NULL`, the corresponding backend default
+#'   is used unless overridden by `group$parameters`.
+#' @param cores Integer. Number of cores for K-NN imputation only. For PCA
+#'   imputation, use `mirai::daemons()` to parallelize across groups.
+#' @param .progress Logical. If `TRUE`, show progress.
+#' @param min_group_size Integer or `NULL`. Minimum total number of columns
+#'   per group, counting both features and auxiliary columns. Groups smaller
+#'   than this are padded with randomly sampled columns from `obj`.
+#' @param seed Integer, numeric, or `NULL`. Random seed for reproducibility.
+#' @param pin_blas Logical. If `TRUE`, pin BLAS threads to 1 to reduce
+#'   contention when using parallel PCA on systems linked with multithreaded
+#'   BLAS.
+#' @param on_infeasible Character. One of `"error"`, `"skip"`, or `"mean"`.
+#'   Controls behavior when a group is infeasible for imputation, for example
+#'   when `k` or `ncp` exceeds the number of usable columns after applying
+#'   `colmax`.
 #'
 #' @details
-#' Performs K-NN or PCA imputation on groups of features independently,
-#' which significantly reduces imputation time for large datasets.
+#' `group_imp()` performs K-NN or PCA imputation on feature groups
+#' independently, which can substantially reduce runtime for large matrices.
 #'
-#' Specify `k` and related arguments to use K-NN, or `ncp` and related
-#' arguments for PCA imputation. If both `k` and `ncp` are `NULL`,
+#' Specify `k` and related arguments to use K-NN imputation, or `ncp` and
+#' related arguments to use PCA imputation. If both `k` and `ncp` are `NULL`,
 #' `group$parameters` must supply either `k` or `ncp` for every group.
 #'
-#' ## Parameter resolution
-#' Group-wise parameters (in `group$parameters`) take priority; global
-#' arguments (`k`, `ncp`, `method`, etc.) fill in any gaps. All groups
-#' must use the same imputation method. Per-group `k` is capped at
-#' `group_size - 1` and `ncp` at `min(nrow(group) - 2L, ncol(group) -
-#' 1L)`, with a warning when capping occurs.
+#' Group-specific parameters in `group$parameters` take priority over global
+#' arguments. Global arguments fill in any missing values. All groups must use
+#' the same imputation method.
 #'
-#' ## Grouping strategies
-#' * Chromosomal grouping to break down the search space.
-#' * Flanking-probe groups for spatially local imputation.
-#' * Column-clustering to form correlation-based groups.
+#' For method-specific arguments inherited from [knn_imp()] or [pca_imp()],
+#' `NULL` means the backend default is used unless overridden by
+#' `group$parameters`.
+#'
+#' Per-group `k` is capped at the number of usable columns in the group minus
+#' one. Per-group `ncp` is capped at the maximum feasible number of PCA
+#' components for that group's submatrix. A warning is issued when capping
+#' occurs.
 #'
 #' @section Parallelization:
-#' * **K-NN**: use the `cores` argument (requires OpenMP). If
-#'   `mirai::daemons()` are active, `cores` is automatically set to 1
-#'   to avoid nested parallelism.
-#' * **PCA**: use `mirai::daemons()` instead of `cores`.
+#' * K-NN: use the `cores` argument. If `mirai` daemons are active, `cores`
+#'   is automatically set to `1` to avoid nested parallelism.
+#' * PCA: use `mirai::daemons()` instead of `cores`.
 #'
-#' On macOS, OpenMP is typically unavailable and `cores` falls back to
-#' 1. Use `mirai::daemons()` for parallelization instead.
+#' When running PCA imputation in parallel with `mirai`, set `pin_blas = TRUE`
+#' in [tune_imp()] or [group_imp()] to prevent BLAS threads from
+#' oversubscribing CPU cores. This relies on `RhpcBLASctl` and works with
+#' OpenBLAS and MKL (typical on Linux, and on Windows after an OpenBLAS swap).
+#' `pin_blas = TRUE` may have no effect on macOS.
 #'
-#' On Linux with OpenBLAS or MKL, set `pin_blas = TRUE` when running
-#' parallel PCA to prevent BLAS threads and `mirai` workers competing
-#' for cores.
+#' @inheritSection pca_imp Performance tips
 #'
 #' @note
-#' A `character` string can be passed to `group` to name a supported
-#' Illumina platform (e.g., `"EPICv2"`, `"EPICv2_deduped"`), which
-#' fetches the manifest automatically. This requires the
-#' `slideimp.extra` package (available on GitHub; see its README for
-#' installation instructions). Supported platforms are listed in
-#' `slideimp.extra::slideimp_arrays`.
+#' A character scalar can be passed to `group` to name a supported Illumina
+#' platform, such as `"EPICv2"` or `"EPICv2_deduped"`. This requires the
+#' optional `slideimp.extra` package to be installed. Supported platforms are
+#' listed in the `slideimp_arrays` object in the `slideimp.extra` package.
 #'
-#' @inherit knn_imp return
+#' @returns A numeric matrix of the same dimensions as `obj`, with missing
+#' values imputed. The returned object has class `slideimp_results`.
 #'
-#' @seealso [prep_groups()]
-#'
-#' @export
+#' @seealso [prep_groups()], [knn_imp()], [pca_imp()]
 #'
 #' @examples
-#' # Generate example data with missing values
 #' set.seed(1234)
 #' to_test <- sim_mat(10, 20, perc_total_na = 0.05, perc_col_na = 1)
 #' obj <- to_test$input
-#' group <- to_test$col_group # metadata that maps `colnames(obj)` to groups
+#' group <- to_test$col_group
 #' head(group)
 #'
 #' # Simple grouped K-NN imputation
-#' results <- group_imp(obj, group = group, k = 2)
+#' results <- group_imp(obj, group = group, k = 2, .progress = FALSE)
+#' results
 #'
 #' # Impute only a subset of features
 #' subset_features <- sample(to_test$col_group$feature, size = 10)
-#' knn_subset <- group_imp(obj, group = group, subset = subset_features, k = 2)
+#' knn_subset <- group_imp(
+#'   obj,
+#'   group = group,
+#'   subset = subset_features,
+#'   k = 2,
+#'   .progress = FALSE
+#' )
 #'
-#' # Use prep_groups() to inspect and tweak per-group parameters
+#' # Use prep_groups() to inspect and edit per-group parameters
 #' prepped <- prep_groups(colnames(obj), group)
-#' prepped$parameters <- lapply(seq_len(nrow(prepped)), \(i) list(k = 2))
+#' prepped$parameters <- lapply(seq_len(nrow(prepped)), function(i) list(k = 2))
 #' prepped$parameters[[2]]$k <- 4
-#' knn_grouped <- group_imp(obj, group = prepped, cores = 2)
+#' knn_grouped <- group_imp(obj, group = prepped, .progress = FALSE)
+#'
 #' @examplesIf interactive() && requireNamespace("mirai", quietly = TRUE)
 #' # PCA imputation with mirai parallelism
 #' mirai::daemons(2)
 #' pca_grouped <- group_imp(obj, group = group, ncp = 2)
 #' mirai::daemons(0)
 #' pca_grouped
+#'
+#' @export
 group_imp <- function(
   obj,
   group,
@@ -517,7 +554,6 @@ group_imp <- function(
   post_imp = NULL,
   dist_pow = NULL,
   tree = NULL,
-  max_cache = NULL,
   # PCA arguments
   scale = NULL,
   coeff.ridge = NULL,
@@ -527,6 +563,9 @@ group_imp <- function(
   nb.init = NULL,
   maxiter = NULL,
   miniter = NULL,
+  solver = NULL,
+  lobpcg_control = NULL,
+  clamp = NULL,
   pin_blas = FALSE,
   na_check = TRUE,
   on_infeasible = c("error", "skip", "mean")
@@ -539,15 +578,17 @@ group_imp <- function(
   check_finite(obj)
   checkmate::assert_flag(pin_blas, null.ok = FALSE, .var.name = "pin_blas")
   on_infeasible <- match.arg(on_infeasible)
+  if (!is.null(solver)) {
+    solver <- match.arg(solver, c("auto", "exact", "lobpcg"))
+  }
   cn <- colnames(obj)
   rn <- rownames(obj)
-  # obj_attrs <- attributes(obj)
   attributes(obj) <- list(dim = dim(obj))
 
   # Step 1: Build canonical groups via prep_groups() ----
   # After this call, group$feature, group$aux, and group$parameters are all
   # guaranteed to exist as properly typed list-columns.
-  # subset is also handled here — non-subset features are demoted to aux.
+  # subset is also handled here - non-subset features are demoted to aux.
   group <- prep_groups(
     obj_cn = cn,
     group = group,
@@ -564,13 +605,13 @@ group_imp <- function(
     cli::cli_abort("Cannot specify both {.arg k} and {.arg ncp} as global parameters.")
   }
 
-  # Global fills gaps (group-wise wins)
+  # global fills gaps (group-wise wins)
   global_params <- list(
     k = k, method = method, colmax = colmax, post_imp = post_imp,
-    dist_pow = dist_pow, tree = tree, max_cache = max_cache,
-    ncp = ncp, scale = scale, coeff.ridge = coeff.ridge,
-    threshold = threshold, row.w = row.w, seed = seed,
-    nb.init = nb.init, maxiter = maxiter, miniter = miniter
+    dist_pow = dist_pow, tree = tree, ncp = ncp, scale = scale,
+    coeff.ridge = coeff.ridge, threshold = threshold, row.w = row.w,
+    seed = seed, nb.init = nb.init, maxiter = maxiter, miniter = miniter,
+    lobpcg_control = lobpcg_control, solver = solver, clamp = clamp
   )
   global_params <- global_params[!vapply(global_params, is.null, logical(1))]
 
@@ -581,7 +622,7 @@ group_imp <- function(
     p
   })
 
-  # Validate: each group has exactly one of k or ncp
+  # validate: each group has exactly one of k or ncp
   has_k <- vapply(group$parameters, \(p) "k" %in% names(p), logical(1))
   has_ncp <- vapply(group$parameters, \(p) "ncp" %in% names(p), logical(1))
 
@@ -608,12 +649,14 @@ group_imp <- function(
 
   imp_method <- if (all(has_k)) "knn" else "pca"
   is_knn_mode <- imp_method == "knn"
+  reg <- .param_registry[[imp_method]]
 
-  # Validate method values
-  valid_methods <- if (is_knn_mode) c("euclidean", "manhattan") else c("regularized", "EM")
+  # validate method values
+  valid_methods <- reg$methods
   bad_method <- vapply(group$parameters, function(p) {
     !is.null(p$method) && !(p$method %in% valid_methods)
   }, logical(1))
+
   if (any(bad_method)) {
     bad <- which(bad_method)
     cli::cli_abort(c(
@@ -622,28 +665,18 @@ group_imp <- function(
     ))
   }
 
-  # Validate parameter names
-  allowed_params <- if (is_knn_mode) {
-    c("k", "method", "colmax", "post_imp", "dist_pow", "tree", "max_cache")
-  } else {
-    c(
-      "ncp", "scale", "method", "coeff.ridge", "row.w",
-      "threshold", "seed", "nb.init", "maxiter", "miniter",
-      "colmax", "post_imp"
-    )
-  }
-  all_param_names <- unique(unlist(lapply(group$parameters, names)))
-  unknown_params <- setdiff(all_param_names, allowed_params)
-  if (length(unknown_params) > 0) {
-    cli::cli_abort(c(
-      "{cli::qty(length(unknown_params))}Unknown parameter{?s} for {imp_method} method:",
-      "x" = "{fmt_trunc(unknown_params, 10)}"
-    ))
-  }
+  # validate parameter names
+  all_param_names <- unique(unlist(lapply(group$parameters, names), use.names = FALSE))
 
-  # Cap per-group k/ncp
+  check_unknown_params(
+    param_names = all_param_names,
+    mode = imp_method,
+    arg = "group$parameters"
+  )
+
+  # cap per-group k/ncp
   group_size <- feat_lengths + aux_lengths
-  required_param <- if (is_knn_mode) "k" else "ncp"
+  required_param <- reg$required
 
   for (i in seq_len(nrow(group))) {
     p <- group$parameters[[i]]
@@ -653,10 +686,9 @@ group_imp <- function(
       min(group_size[i] - 1L, nrow(obj) - 2L)
     }
     if (p[[required_param]] > cap) {
-      warning(sprintf(
-        "Group %d: %s capped from %d to %d (group size = %d).",
-        i, required_param, p[[required_param]], cap, group_size[i]
-      ))
+      cli::cli_warn(
+        "Group {i}: {.arg {required_param}} capped from {p[[required_param]]} to {cap} (group size = {group_size[i]})."
+      )
       p[[required_param]] <- cap
     }
     if (p[[required_param]] < 1L) {
@@ -668,10 +700,12 @@ group_imp <- function(
     group$parameters[[i]] <- p
   }
 
-  message(sprintf("Imputing %d group(s) using %s.", nrow(group), toupper(imp_method)))
+  cli::cli_inform(
+    "Imputing {nrow(group)} group{?s} using {.strong {toupper(imp_method)}}."
+  )
 
   # Step 3: Imputation loop ----
-  # Column-index lookups
+  # column-index lookups
   iter <- seq_len(nrow(group))
 
   all_feats_vec <- unlist(group$feature)
@@ -692,53 +726,49 @@ group_imp <- function(
     prep_groups = group$feature
   )
 
-  # Parallelism resolution
+  # parallelism resolution
   parallelize <- tryCatch(mirai::require_daemons(), error = function(e) FALSE)
 
   if (is_knn_mode) {
-    if (cores > 1) {
-      if (!has_openmp()) {
-        message("OpenMP not available (common on macOS). K-NN will run single-threaded. Use mirai::daemons() for parallelization.")
-        cores <- 1
-      } else if (parallelize) {
-        message(
-          "Both `cores > 1` and `mirai::daemons()` detected. ",
-          "Setting `cores = 1` to avoid nested parallelism. ",
-          "Parallelization will be handled by `mirai`."
-        )
-        cores <- 1
-      }
+    if (cores > 1 && parallelize) {
+      cli::cli_inform(c(
+        "!" = "Both {.arg cores} > 1 and active {.pkg mirai} daemons detected.",
+        "i" = "Setting {.arg cores} = 1 to avoid nested parallelism. Distribution will be handled by {.pkg mirai}."
+      ))
+      cores <- 1
     }
-  } else if (cores > 1) {
-    warning(
-      "`cores` is ignored for PCA imputation; parallelism comes from ",
-      "threaded BLAS or mirai daemons across groups. Setting `cores = 1`."
-    )
+  } else if (cores > 1 && !parallelize) {
+    cli::cli_inform(c(
+      "!" = "{.arg cores} = {cores} is ignored for PCA imputation.",
+      "i" = "Parallelism comes from threaded BLAS or {.pkg mirai} daemons across groups."
+    ))
     cores <- 1
   }
 
-  # Build per-group call parameters
+  # build per-group call parameters
   params <- lapply(iter, function(i) {
     p <- group$parameters[[i]]
     p$na_check <- FALSE
     if (is_knn_mode) {
       p$cores <- cores
       p$subset <- indices[[i]]$features_idx_local
+      p$.progress <- FALSE
     }
     p
   })
 
   imp_fn <- if (is_knn_mode) knn_imp else pca_imp
+  group_ids <- group$group
 
   if (parallelize) {
-    message("Running Mode: parallel (mirai across groups)...")
+    cli::cli_inform("Running mode: {.strong mirai}")
   } else if (is_knn_mode && cores > 1) {
-    message("Running Mode: parallel (OpenMP within groups)...")
+    cli::cli_inform("Running mode: {.strong threaded} ({cores} cores)")
   } else {
-    message("Running Mode: sequential ...")
+    cli::cli_inform("Running mode: {.strong sequential}")
   }
 
-  # Imputation
+  # imputation
   if (parallelize) {
     feat_cumsum <- cumsum(c(0L, feat_lengths))
     out_ranges <- lapply(iter, function(i) {
@@ -768,14 +798,20 @@ group_imp <- function(
           RhpcBLASctl::blas_set_num_threads(1)
           RhpcBLASctl::omp_set_num_threads(1)
         }
+
         src <- bigmemory::attach.big.matrix(big_obj_desc)
         dst <- bigmemory::attach.big.matrix(big_out_desc)
         sub_mat <- src[, indices[[i]]$col_idx, drop = FALSE]
+
         imputed <- tryCatch(
           suppressMessages(do.call(imp_fn, c(list(obj = sub_mat), params[[i]]))),
           slideimp_infeasible = function(e) {
             switch(on_infeasible,
-              error = stop(e),
+              error = cli::cli_abort(c(
+                "Group {group_ids[[i]]} is infeasible for imputation.",
+                "x" = conditionMessage(e),
+                "i" = "Set {.code on_infeasible = 'skip'} or {.code on_infeasible = 'mean'} to continue."
+              ), parent = e),
               skip = structure(sub_mat, fallback = TRUE),
               mean = structure(
                 mean_imp_col(sub_mat, subset = indices[[i]]$features_idx_local),
@@ -784,6 +820,7 @@ group_imp <- function(
             )
           }
         )
+
         dst[, out_ranges[[i]]] <- imputed[, indices[[i]]$features_idx_local, drop = FALSE]
         return(isTRUE(attr(imputed, "fallback")))
       },
@@ -794,21 +831,27 @@ group_imp <- function(
       params = params,
       pin_blas = pin_blas,
       out_ranges = out_ranges,
-      on_infeasible = on_infeasible
+      on_infeasible = on_infeasible,
+      group_ids = group_ids
     )
     m <- mirai::mirai_map(iter, crated_fn)
     fallback_flags <- unlist(m[.progress = .progress])
     obj[, all_feats_pos] <- big_out[, ]
   } else {
-    if (.progress) pb <- cli::cli_progress_bar(total = length(iter))
+    if (.progress) pb <- cli::cli_progress_bar(name = "Imputing", total = length(iter))
     fallback_flags <- logical(length(iter))
     for (i in iter) {
       sub_mat <- obj[, indices[[i]]$col_idx, drop = FALSE]
+
       imputed <- tryCatch(
         suppressMessages(do.call(imp_fn, c(list(obj = sub_mat), params[[i]]))),
         slideimp_infeasible = function(e) {
           switch(on_infeasible,
-            error = stop(e),
+            error = cli::cli_abort(c(
+              "Group {group_ids[[i]]} is infeasible for imputation.",
+              "x" = conditionMessage(e),
+              "i" = "Set {.code on_infeasible = 'skip'} or {.code on_infeasible = 'mean'} to continue."
+            ), parent = e),
             skip = structure(sub_mat, fallback = TRUE),
             mean = structure(
               mean_imp_col(sub_mat, subset = indices[[i]]$features_idx_local),
@@ -817,9 +860,10 @@ group_imp <- function(
           )
         }
       )
+
       obj[, feat_splits[[i]]] <- imputed[, indices[[i]]$features_idx_local, drop = FALSE]
-      if (.progress) cli::cli_progress_update(id = pb)
       fallback_flags[i] <- isTRUE(attr(imputed, "fallback"))
+      if (.progress) cli::cli_progress_update(id = pb)
     }
     if (.progress) cli::cli_progress_done(id = pb)
   }

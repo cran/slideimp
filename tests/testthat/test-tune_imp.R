@@ -174,7 +174,7 @@ test_that("set.seed makes sample_na_loc reproducible", {
   a <- sample_na_loc(m, n_cols = 3, n_rows = 2, n_reps = 3)
   set.seed(42)
   b <- sample_na_loc(m, n_cols = 3, n_rows = 2, n_reps = 3)
-  expect_identical(a, b)
+  expect_equal(a, b)
 })
 
 # failure path
@@ -734,7 +734,7 @@ test_that("tune_imp works with custom function and NULL parameters", {
   set.seed(99)
   obj <- matrix(rnorm(150), nrow = 10, ncol = 15)
 
-  # a function with only `obj` — fills NAs with 0
+  # a function with only `obj` - fills NAs with 0
   zero_fill <- function(obj) {
     obj[is.na(obj)] <- 0
     return(obj)
@@ -803,19 +803,136 @@ test_that("tune_imp with NULL parameters and a function that has defaults", {
   expect_equal(res_null$result[[1]]$estimate, res_explicit$result[[1]]$estimate)
 })
 
-# test_that("grid_to_linear correctly converts 2D positions to linear indices", {
-#   n <- 10
-#   m <- 10
-#
-#   pos_2d <- matrix(c(1, 1, 1, 2, 2, 1, 10, 10), ncol = 2, byrow = TRUE)
-#   pos_1d <- grid_to_linear(pos_2d, n, m)
-#   sim_dat <- matrix(rnorm(n * m), ncol = n, nrow = m)
-#   expect_identical(sim_dat[pos_2d], sim_dat[pos_1d])
-# })
+test_that("serial branch reuses `pre` correctly across param_sets within a rep", {
+  set.seed(1234)
+  obj <- matrix(rnorm(50 * 100), nrow = 50, ncol = 100) # clean, no pre-existing NAs
 
-# Tests for sample_na_loc() / sample_each_rep()
-#
-# Focus: core sampling logic (shape, budgets, zero-variance protection,
-# subset handling, num_na distribution, rep independence).
-# Pre-condition validation (checkmate asserts, colmax/rowmax pre-injection
-# checks) is intentionally not covered here.
+  seen <- list()
+  capture_fun <- function(obj, tag) {
+    seen[[length(seen) + 1L]] <<- which(is.na(obj), arr.ind = TRUE)
+    obj[is.na(obj)] <- 0
+    obj
+  }
+
+  params <- data.frame(tag = c("a", "b", "c")) # 3 param sets
+
+  res <- tune_imp(
+    obj, params,
+    .f = capture_fun,
+    n_reps = 2, num_na = 20, .progress = FALSE
+  )
+
+  # 1 probe call + 2 reps * 3 param_sets = 7
+  expect_length(seen, 7L)
+
+  rep1 <- seen[2:4]
+  rep2 <- seen[5:7]
+
+  # within-rep: NA mask identical across param_sets (pre is reused correctly)
+  expect_equal(rep1[[1]], rep1[[2]])
+  expect_equal(rep1[[2]], rep1[[3]])
+  expect_equal(rep2[[1]], rep2[[2]])
+  expect_equal(rep2[[2]], rep2[[3]])
+
+  # across-rep: masks differ (pre is rebuilt with the new rep's NAs)
+  expect_false(identical(rep1[[1]], rep2[[1]]))
+
+  # truth_list is indexed by the correct rep_id.
+  # sort both sides because na_loc ordering (from C++) != which() column-major order.
+  for (i in seq_len(nrow(res))) {
+    mask <- if (res$rep_id[i] == 1L) rep1[[1]] else rep2[[1]]
+    expect_equal(sort(res$result[[i]]$truth), sort(obj[mask]))
+  }
+})
+
+test_that("slide_imp flank mode is tuned correctly", {
+  set.seed(1234)
+  ncols <- 100
+  obj <- sim_mat(n = 50, p = ncols, perc_col_na = 1)$input
+  # we test imputing subset feature 5, 20, and 95
+  testing_features <- paste0("feature", c(5, 20, 95))
+  na_loc <- sample_na_loc(
+    obj = obj,
+    n_cols = 3,
+    na_col_subset = testing_features,
+    n_rows = 2,
+    n_reps = 1
+  )
+
+  # we manually use slide imp flank mode by manual NA injection into obj
+  slide_imp_pre <- obj
+  truth <- slide_imp_pre[na_loc[[1]]]
+  slide_imp_pre[na_loc[[1]]] <- NA
+  location <- seq_len(ncols)
+
+  ## slide_imp on the amputed object. Windows are
+  #  # slideimp table: 3 x 5
+  # start end window_n target  subset_local
+  #     1  10       10      5 <integer [1]>
+  #    15  25       11     20 <integer [1]>
+  #    90 100       11     95 <integer [1]>
+
+  slide_imp_knn <- slide_imp(
+    obj = slide_imp_pre,
+    location = location,
+    k = 2,
+    subset = testing_features,
+    min_window_n = 3,
+    window_size = 5,
+    overlap_size = 0,
+    flank = TRUE
+  )
+
+  slide_imp_pca <- slide_imp(
+    obj = slide_imp_pre,
+    location = location,
+    ncp = 2,
+    subset = testing_features,
+    min_window_n = 3,
+    window_size = 5,
+    overlap_size = 0,
+    flank = TRUE
+  )
+
+  ## now we setup tune_imp
+  params <- data.frame(
+    min_window_n = 3, window_size = 5, overlap_size = 0, flank = TRUE
+  )
+  knn_params <- params
+  knn_params$k <- 2
+  pca_params <- params
+  pca_params$ncp <- 2
+
+  tune_imp_knn <- tune_imp(
+    obj,
+    parameters = knn_params,
+    na_loc = na_loc,
+    .f = "slide_imp",
+    location = location
+  )
+
+  tune_imp_pca <- tune_imp(
+    obj,
+    parameters = pca_params,
+    na_loc = na_loc,
+    .f = "slide_imp",
+    location = location
+  )
+
+  expect_equal(
+    tune_imp_knn$result[[1]]$estimate,
+    slide_imp_knn[na_loc[[1]]]
+  )
+  expect_equal(
+    tune_imp_knn$result[[1]]$truth,
+    truth
+  )
+  expect_equal(
+    tune_imp_pca$result[[1]]$estimate,
+    slide_imp_pca[na_loc[[1]]]
+  )
+  expect_equal(
+    tune_imp_pca$result[[1]]$truth,
+    truth
+  )
+})

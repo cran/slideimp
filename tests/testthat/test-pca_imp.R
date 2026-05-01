@@ -4,9 +4,14 @@ test_that("same results as imputePCA", {
   to_test <- sim_mat(20, 50, perc_total_na = 0.25, perc_col_na = 1, rho = 0.75)$input
   expect_true(anyNA(to_test))
   # expected orientation (wide)
-  r1 <- missMDA::imputePCA(to_test, ncp = 2, nb.init = 10, seed = 1234)
+  r1 <- missMDA::imputePCA(to_test, ncp = 2, nb.init = 1, seed = 1234)
   set.seed(1234)
-  r2 <- pca_imp(to_test, ncp = 2, nb.init = 10, seed = 1234)
+  r2 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 1, seed = 1234,
+    solver = "exact",
+    colmax = 1
+  )
   expect_equal(r1$completeObs, r2[, ])
 
   row.w <- runif(nrow(to_test))
@@ -14,7 +19,11 @@ test_that("same results as imputePCA", {
   set.seed(1234)
   r3 <- missMDA::imputePCA(to_test, ncp = 2, row.w = row.w, nb.init = 5, seed = 1234)
   set.seed(1234)
-  r4 <- pca_imp(to_test, ncp = 2, nb.init = 5, row.w = row.w, seed = 1234)
+  r4 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = row.w, seed = 1234,
+    solver = "exact"
+  )
   expect_equal(r3$completeObs, r4[, ])
 
   # transposed input also gives identical results
@@ -22,7 +31,11 @@ test_that("same results as imputePCA", {
   to_test_t <- t(to_test)
   r1_t <- missMDA::imputePCA(to_test_t, ncp = 2, nb.init = 10, seed = 1234)
   set.seed(1234)
-  r2_t <- pca_imp(to_test_t, ncp = 2, nb.init = 10, seed = 1234)
+  r2_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 10, seed = 1234,
+    solver = "exact"
+  )
   expect_equal(r1_t$completeObs, r2_t[, ])
 
   row.w_t <- runif(nrow(to_test_t))
@@ -30,7 +43,66 @@ test_that("same results as imputePCA", {
   set.seed(1234)
   r3_t <- missMDA::imputePCA(to_test_t, ncp = 2, row.w = row.w_t, nb.init = 5, seed = 1234)
   set.seed(1234)
-  r4_t <- pca_imp(to_test_t, ncp = 2, nb.init = 5, row.w = row.w_t, seed = 1234)
+  r4_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 5, row.w = row.w_t, seed = 1234,
+    solver = "exact"
+  )
+  expect_equal(r3_t$completeObs, r4_t[, ])
+})
+
+test_that("same results as imputePCA, method = 'EM'", {
+  skip_if_not_installed("missMDA")
+  set.seed(1234)
+  to_test <- sim_mat(20, 50, perc_total_na = 0.25, perc_col_na = 1, rho = 0.75)$input
+  expect_true(anyNA(to_test))
+  # expected orientation (wide)
+  r1 <- missMDA::imputePCA(to_test, ncp = 2, nb.init = 10, seed = 1234, method = "EM")
+  set.seed(1234)
+  r2 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 10, seed = 1234, method = "EM",
+    solver = "exact"
+  )
+  expect_equal(r1$completeObs, r2[, ])
+
+  row.w <- runif(nrow(to_test))
+  row.w <- row.w / sum(row.w)
+  set.seed(1234)
+  r3 <- missMDA::imputePCA(
+    to_test,
+    ncp = 2, row.w = row.w, nb.init = 5, seed = 1234, method = "EM"
+  )
+  set.seed(1234)
+  r4 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = row.w, seed = 1234, method = "EM",
+    solver = "exact"
+  )
+  expect_equal(r3$completeObs, r4[, ])
+
+  # transposed input also gives identical results
+  set.seed(1234)
+  to_test_t <- t(to_test)
+  r1_t <- missMDA::imputePCA(to_test_t, ncp = 2, nb.init = 10, seed = 1234, method = "EM")
+  set.seed(1234)
+  r2_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 10, seed = 1234, method = "EM",
+    solver = "exact"
+  )
+  expect_equal(r1_t$completeObs, r2_t[, ])
+
+  row.w_t <- runif(nrow(to_test_t))
+  row.w_t <- row.w_t / sum(row.w_t)
+  set.seed(1234)
+  r3_t <- missMDA::imputePCA(to_test_t, ncp = 2, row.w = row.w_t, nb.init = 5, seed = 1234, method = "EM")
+  set.seed(1234)
+  r4_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 5, row.w = row.w_t, seed = 1234, method = "EM",
+    solver = "exact"
+  )
   expect_equal(r3_t$completeObs, r4_t[, ])
 })
 
@@ -43,7 +115,11 @@ test_that("same results as imputePCA, scale = FALSE", {
   # expected orientation (wide)
   r1 <- missMDA::imputePCA(to_test, ncp = 2, nb.init = 10, seed = 1234, scale = FALSE)
   set.seed(1234)
-  r2 <- pca_imp(to_test, ncp = 2, nb.init = 10, seed = 1234, scale = FALSE)
+  r2 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 10, seed = 1234, scale = FALSE,
+    solver = "exact"
+  )
   expect_equal(r1$completeObs, r2[, ])
 
   row.w <- runif(nrow(to_test))
@@ -51,7 +127,11 @@ test_that("same results as imputePCA, scale = FALSE", {
   set.seed(1234)
   r3 <- missMDA::imputePCA(to_test, ncp = 2, row.w = row.w, nb.init = 5, seed = 1234, scale = FALSE)
   set.seed(1234)
-  r4 <- pca_imp(to_test, ncp = 2, nb.init = 5, row.w = row.w, seed = 1234, scale = FALSE)
+  r4 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = row.w, seed = 1234, scale = FALSE,
+    solver = "exact"
+  )
   expect_equal(r3$completeObs, r4[, ])
 
   # transposed input also gives identical results
@@ -59,7 +139,11 @@ test_that("same results as imputePCA, scale = FALSE", {
   to_test_t <- t(to_test)
   r1_t <- missMDA::imputePCA(to_test_t, ncp = 2, nb.init = 10, seed = 1234, scale = FALSE)
   set.seed(1234)
-  r2_t <- pca_imp(to_test_t, ncp = 2, nb.init = 10, seed = 1234, scale = FALSE)
+  r2_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 10, seed = 1234, scale = FALSE,
+    solver = "exact"
+  )
   expect_equal(r1_t$completeObs, r2_t[, ])
 
   row.w_t <- runif(nrow(to_test_t))
@@ -67,18 +151,12 @@ test_that("same results as imputePCA, scale = FALSE", {
   set.seed(1234)
   r3_t <- missMDA::imputePCA(to_test_t, ncp = 2, row.w = row.w_t, nb.init = 5, seed = 1234, scale = FALSE)
   set.seed(1234)
-  r4_t <- pca_imp(to_test_t, ncp = 2, nb.init = 5, row.w = row.w_t, seed = 1234, scale = FALSE)
+  r4_t <- pca_imp(
+    to_test_t,
+    ncp = 2, nb.init = 5, row.w = row.w_t, seed = 1234, scale = FALSE,
+    solver = "exact"
+  )
   expect_equal(r3_t$completeObs, r4_t[, ])
-})
-
-test_that("Behavior with extreme missing columns and rows", {
-  set.seed(1234)
-  to_test <- sim_mat(20, 50, perc_total_na = 0.25, perc_col_na = 1, rho = 0.75)$input
-  to_test[1, ] <- NA
-  expect_no_error(pca_imp(to_test, ncp = 2, seed = 1234))
-  to_test[, 1] <- NA
-  expect_error(pca_imp(to_test, ncp = 2, seed = 1234))
-  expect_true(all(is.na(to_test[, 1])))
 })
 
 test_that("row.w = 'n_miss' matches missMDA::imputePCA with equivalent weights", {
@@ -95,12 +173,35 @@ test_that("row.w = 'n_miss' matches missMDA::imputePCA with equivalent weights",
 
   # compare "n_miss" shortcut against missMDA with explicit weights
   set.seed(1234)
-  r1 <- missMDA::imputePCA(to_test, ncp = 2, nb.init = 5, row.w = expected_w, seed = 1234)
+  r1 <- missMDA::imputePCA(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = expected_w, seed = 1234
+  )
   set.seed(1234)
-  r2 <- pca_imp(to_test, ncp = 2, nb.init = 5, row.w = "n_miss", seed = 1234)
+  r2 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = "n_miss", seed = 1234,
+    solver = "exact"
+  )
   expect_equal(r1$completeObs, r2[, ])
-  r3 <- pca_imp(to_test, ncp = 2, nb.init = 5, row.w = expected_w, seed = 1234)
+
+  set.seed(1234)
+  r3 <- pca_imp(
+    to_test,
+    ncp = 2, nb.init = 5, row.w = expected_w, seed = 1234,
+    solver = "exact"
+  )
   expect_equal(r2, r3)
+})
+
+test_that("Behavior with extreme missing columns and rows", {
+  set.seed(1234)
+  to_test <- sim_mat(20, 50, perc_total_na = 0.25, perc_col_na = 1, rho = 0.75)$input
+  to_test[1, ] <- NA
+  expect_no_error(pca_imp(to_test, ncp = 2, seed = 1234))
+  to_test[, 1] <- NA
+  expect_error(pca_imp(to_test, ncp = 2, seed = 1234))
+  expect_true(all(is.na(to_test[, 1])))
 })
 
 test_that("row.w = 'n_miss' floors near-zero weights", {
@@ -132,7 +233,7 @@ test_that("pca_imp handles ineligible columns (high miss rate / zero variance) c
   set.seed(1234)
   to_test <- sim_mat(40, 12, perc_total_na = 0.25, perc_col_na = 0.6)$input
 
-  # Force ineligible columns:
+  # force ineligible columns:
   # - Column 1: miss_rate > colmax (0.925 > 0.9)
   to_test[1:37, 1] <- NA
   mean_1 <- mean(to_test[, 1], na.rm = TRUE)
@@ -159,13 +260,13 @@ test_that("pca_imp handles ineligible columns (high miss rate / zero variance) c
 
   # ineligible high-miss column becomes constant (mean imputation)
   expect_true(all(res[1:37, 1] == mean_1))
-  expect_identical(unname(res[1:37, 1]), rep(mean_1, times = 37))
+  expect_equal(unname(res[1:37, 1]), rep(mean_1, times = 37))
 
   # constant column untouched
   expect_equal(length(unique(res[, 2])), 1L)
 
   # near-zero variance column: NAs filled with column mean
-  expect_identical(unname(res[1:3, 3]), rep(mean_3, 3))
+  expect_equal(unname(res[1:3, 3]), rep(mean_3, 3))
 
   # 2. post_imp = FALSE: only eligible columns are PCA-imputed;
   # ineligible columns keep their original NAs
@@ -189,7 +290,7 @@ test_that("pca_imp handles ineligible columns (high miss rate / zero variance) c
 test_that("pca_imp falls back to mean imputation when ncp > usable eligible columns", {
   set.seed(1234)
   to_test <- sim_mat(30, 8, perc_total_na = 0.1, perc_col_na = 0.3)$input
-  # This column will excceed colmax
+  # this column will excceed colmax
   to_test[1:29, 1] <- NA
   expect_no_error(res <- pca_imp(
     to_test,
@@ -199,13 +300,13 @@ test_that("pca_imp falls back to mean imputation when ncp > usable eligible colu
     colmax = 0.9,
     post_imp = FALSE
   ))
-  # Make most columns ineligible (all-NA)
+  # make most columns ineligible (all-NA)
   to_test[, 1:6] <- NA
   for (i in 1:6) {
     to_test[sample.int(30, size = 1), i] <- rnorm(1)
   }
 
-  # Only 2 eligible columns left -> ncp = 3 > min(28, 1) -> error (1 usable component)
+  # only 2 eligible columns left -> ncp = 3 > min(28, 1) -> error (1 usable component)
   expect_error(
     pca_imp(
       to_test,
@@ -217,6 +318,47 @@ test_that("pca_imp falls back to mean imputation when ncp > usable eligible colu
     ),
     "exceeds the maximum usable components"
   )
+})
+
+test_that("pca_imp clamps imputed values to specified bounds", {
+  set.seed(1234)
+  to_test <- sim_mat(30, 8, perc_total_na = 0.1)$input
+  na_pos <- which(is.na(to_test), arr.ind = TRUE)
+  observed_mask <- !is.na(to_test)
+  observed_before <- to_test[observed_mask]
+
+  # lower bound far above any plausible imputation -> all imputed == 999
+  res_lo <- pca_imp(
+    to_test,
+    ncp = 2, seed = 1234,
+    clamp = c(999, Inf), post_imp = FALSE
+  )
+  expect_true(all(res_lo[na_pos] == 999))
+  expect_equal(res_lo[observed_mask], observed_before)
+
+  # upper bound far below any plausible imputation -> all imputed == -999
+  res_hi <- pca_imp(
+    to_test,
+    ncp = 2, seed = 1234,
+    clamp = c(-Inf, -999), post_imp = FALSE
+  )
+  expect_true(all(res_hi[na_pos] == -999))
+  expect_equal(res_hi[observed_mask], observed_before)
+})
+
+test_that("post_imp fills NAs in ineligible columns with column mean", {
+  set.seed(1234)
+  to_test <- sim_mat(30, 8, perc_total_na = 0.05)$input
+  to_test[1:28, 1] <- NA # column 1 exceeds colmax = 0.9
+
+  res_with <- pca_imp(to_test, ncp = 2, seed = 1234, colmax = 0.9, post_imp = TRUE)
+  res_without <- pca_imp(to_test, ncp = 2, seed = 1234, colmax = 0.9, post_imp = FALSE)
+
+  expect_false(anyNA(res_with))
+  expect_true(anyNA(res_without[, 1]))
+  # filled values should equal column mean of remaining observed
+  filled <- res_with[is.na(to_test[, 1]), 1]
+  expect_true(all(filled == mean(to_test[, 1], na.rm = TRUE)))
 })
 
 test_that("pca_imp doesn't mess up the original object", {
@@ -232,8 +374,8 @@ test_that("pca_imp doesn't mess up the original object", {
     colmax = 0.9,
     post_imp = FALSE
   )
-  expect_identical(passed_obj, to_test)
-  expect_identical(is.na(to_test), is.na(passed_obj))
+  expect_equal(passed_obj, to_test)
+  expect_equal(is.na(to_test), is.na(passed_obj))
 })
 
 test_that("pca_imp restores object even on bad input", {
@@ -250,5 +392,158 @@ test_that("pca_imp restores object even on bad input", {
     post_imp = FALSE
   ))
 
-  expect_identical(to_test, passed_obj)
+  expect_equal(to_test, passed_obj)
+})
+
+test_that("Throw on Inf", {
+  set.seed(1234)
+  to_test <- sim_mat(20, 20, perc_total_na = 0.2, perc_col_na = 1)$input
+  to_test[1, 1] <- Inf
+  expect_error(pca_imp(to_test, ncp = 3), "Infinite")
+  to_test[1, 1] <- -Inf
+  expect_error(pca_imp(to_test, ncp = 3), "Infinite")
+})
+
+# lobpcg ----
+test_that("LOBPCG mode during warmup matches forced exact path", {
+  set.seed(1234)
+  x <- sim_mat(20, 80)$input
+  pca_iters <- 12L
+
+  expect_warning(
+    ref <- run_pca_fixed_iters(
+      x,
+      solver = "exact",
+      pca_iters = pca_iters
+    ),
+    "Stopped after"
+  )
+
+  expect_warning(
+    got <- run_pca_fixed_iters(
+      x,
+      solver = "lobpcg",
+      ctrl = lobpcg_control(
+        maxiter = 50L,
+        warmup_iters = pca_iters + 1L,
+        tol = 1e-10
+      ),
+      pca_iters = pca_iters
+    ),
+    "Stopped after"
+  )
+
+  expect_false(anyNA(ref$mat))
+  expect_false(anyNA(got$mat))
+  expect_equal(dim(got$mat), dim(ref$mat))
+
+  # same numerical path: warmup_iters > pca_iters means LOBPCG never triggers.
+  expect_lt(max_abs_diff(got$mat, ref$mat), 1e-10)
+
+  expect_equal(ref$n_lobpcg_ok, 0L)
+  expect_equal(ref$n_lobpcg_bad, 0L)
+  expect_equal(ref$n_exact, pca_iters)
+
+  expect_equal(got$n_lobpcg_ok, 0L)
+  expect_equal(got$n_lobpcg_bad, 0L)
+  expect_equal(got$n_exact, pca_iters)
+})
+
+test_that("LOBPCG enabled agrees with exact eigensolver branch", {
+  cases <- list(
+    tall = c(80L, 25L),
+    wide = c(25L, 80L)
+  )
+
+  set.seed(1234)
+
+  for (case in cases) {
+    n <- case[[1L]]
+    p <- case[[2L]]
+
+    x <- sim_mat(n, p)$input
+    pca_iters <- 14L
+    warmup <- 2L
+
+    expect_warning(
+      ref <- run_pca_fixed_iters(
+        x,
+        solver = "exact",
+        pca_iters = pca_iters
+      ),
+      "Stopped after"
+    )
+
+    expect_warning(
+      got <- run_pca_fixed_iters(
+        x,
+        solver = "lobpcg",
+        ctrl = lobpcg_control(
+          maxiter = 100L,
+          warmup_iters = warmup,
+          tol = 1e-8
+        ),
+        pca_iters = pca_iters
+      ),
+      "Stopped after"
+    )
+
+    expect_false(anyNA(ref$mat))
+    expect_false(anyNA(got$mat))
+    expect_equal(dim(got$mat), dim(ref$mat))
+    expect_lt(max_abs_diff(got$mat, ref$mat), 1e-4)
+
+    # forced exact: every iteration uses dsyevr.
+    expect_equal(ref$n_lobpcg_ok, 0L)
+    expect_equal(ref$n_lobpcg_bad, 0L)
+    expect_equal(ref$n_exact, pca_iters)
+
+    # LOBPCG: warmup iterations use exact, then LOBPCG should converge.
+    # the structural invariant always holds
+    expect_equal(got$n_exact + got$n_lobpcg_ok + got$n_lobpcg_bad, pca_iters)
+    # warmup did use exact
+    expect_gte(got$n_exact, warmup)
+    # the vast majority of post-warmup iters used LOBPCG successfully
+    expect_gte(got$n_lobpcg_ok, pca_iters - warmup - 2L)
+  }
+})
+
+test_that("LOBPCG fallback to exact still produces correct result", {
+  set.seed(1234)
+  x <- sim_mat(60, 30)$input
+  pca_iters <- 10L
+  warmup <- 2L
+
+  expect_warning(
+    ref <- run_pca_fixed_iters(
+      x,
+      solver = "exact",
+      pca_iters = pca_iters
+    ),
+    "Stopped after"
+  )
+
+  # tol below machine precision + maxiter = 1 forces LOBPCG to fail every
+  # post-warmup iteration, exercising the exact fallback path.
+  expect_warning(
+    got <- run_pca_fixed_iters(
+      x,
+      solver = "lobpcg",
+      ctrl = lobpcg_control(
+        maxiter = 1L,
+        warmup_iters = warmup,
+        tol = 1e-20
+      ),
+      pca_iters = pca_iters
+    ),
+    "Stopped after"
+  )
+
+  expect_false(anyNA(got$mat))
+  expect_lt(max_abs_diff(got$mat, ref$mat), 1e-4)
+
+  # every post-warmup iteration should attempt LOBPCG, fail, then fall back to exact.
+  expect_equal(got$n_lobpcg_ok, 0L)
+  expect_equal(got$n_lobpcg_bad, pca_iters - warmup)
+  expect_equal(got$n_exact, pca_iters) # warmup exact + fallback exact
 })

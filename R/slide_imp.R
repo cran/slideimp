@@ -25,83 +25,91 @@ find_overlap_regions <- function(start, end) {
   )
 }
 
-#' Sliding Window K-NN or PCA Imputation
+#' Sliding-Window K-NN or PCA Imputation
 #'
-#' @description
-#' Performs sliding window K-NN or PCA imputation of large numeric matrices column-wise. This
-#' method assumes that columns are meaningfully sorted by `location`.
+#' Perform sliding-window K-NN or PCA imputation on a numeric matrix whose
+#' columns are meaningfully ordered.
 #'
 #' @inheritParams knn_imp
 #' @inheritParams pca_imp
-#' @inheritParams group_imp
 #'
 #' @param location A sorted numeric vector of length `ncol(obj)` giving the
-#' position of each column (e.g., genomic coordinates). Used to define
-#' sliding windows.
-#' @param window_size Window width in the same units as `location`.
-#' @param overlap_size Overlap between consecutive windows in the same units
-#' as `location`. Must be less than `window_size`. Default is `0`. Ignored
-#' when `flank = TRUE`.
-#' @param flank Logical. If `TRUE`, instead of sliding windows across the
-#' whole matrix, one window of width `window_size` is created flanking each feature
-#' listed in `subset`. In this mode `overlap_size` is ignored. Requires `subset` to be
-#' provided. Default = `FALSE`.
-#' @param min_window_n Minimum number of columns a window must contain to be
-#' imputed. Windows smaller than this are not imputed. `k` and `ncp` must also
-#' be smaller than `min_window_n`.
-#' @param .progress Show progress bar (default = `TRUE`).
-#' @param method For K-NN imputation: distance metric to use (`"euclidean"` or `"manhattan"`).
-#' For PCA imputation: regularization imputation algorithm (`"regularized"` or `"EM"`).
+#'   position of each column, such as genomic coordinates.
+#' @param window_size Numeric. Window width in the same units as `location`.
+#' @param overlap_size Numeric. Overlap between consecutive windows in the
+#'   same units as `location`. Must be less than `window_size`. Ignored when
+#'   `flank = TRUE`.
+#' @param flank Logical. If `FALSE`, imputation uses sliding windows across the
+#'   full matrix. If `TRUE`, one window of width `window_size` is created for
+#'   each feature listed in `subset`; `overlap_size` is ignored. `subset` must
+#'   be supplied when `flank = TRUE`.
+#' @param min_window_n Integer. Minimum number of columns a window must contain
+#'   to be considered for imputation. For non-dry runs, the selected `k` or
+#'   `ncp` value must be feasible for the usable columns in each retained
+#'   window after applying `colmax`.
+#' @param subset Optional character or integer vector specifying columns to
+#'   impute. If `NULL`, all eligible columns are imputed. Required when
+#'   `flank = TRUE`.
 #' @param dry_run Logical. If `TRUE`, skip imputation and return a
-#' `slideimp_tbl` object of the windows that *would* be used (after all dropping
-#' rules). `k`/`ncp` are not required in this mode. Columns: `start`, `end`,
-#' `window_n`, plus `subset_local` (list-column of local subset indices) when
-#' `flank = FALSE`, or `target` and `subset_local` when `flank = TRUE`.
-#' Default = `FALSE`.
+#'   `slideimp_tbl` describing the windows that would be used after all
+#'   filtering rules are applied. In this mode, `k` and `ncp` are not required.
+#' @param method Character or `NULL`. For K-NN imputation, one of
+#'   `"euclidean"` or `"manhattan"`. For PCA imputation, one of
+#'   `"regularized"` or `"EM"`. If `NULL`, the corresponding backend default
+#'   is used.
+#' @param cores Integer. Number of cores to use for K-NN imputation.
+#' @param on_infeasible Character. One of `"skip"`, `"error"`, or `"mean"`.
+#'   Controls behavior when a window is infeasible for imputation, for example
+#'   when `k` or `ncp` exceeds the number of usable columns after applying
+#'   `colmax`.
 #'
 #' @details
-#' The sliding window approach divides the input matrix into smaller segments
+#' The sliding-window approach divides the input matrix into smaller segments
 #' based on `location` values and applies imputation to each window
-#' independently. Values in overlapping areas are averaged across windows to
+#' independently. Values in overlapping regions are averaged across windows to
 #' produce the final imputed result.
 #'
 #' Two windowing modes are supported:
 #'
-#' * `flank = FALSE` (default): Greedily partitions the
-#'   `location` vector into windows of width `window_size` with the requested
-#'   `overlap_size` between consecutive windows.
+#' * `flank = FALSE`: greedily partition `location` into windows of width
+#'   `window_size` with the requested `overlap_size` between consecutive
+#'   windows.
+#' * `flank = TRUE`: create one window per feature in `subset`, centered on
+#'   that feature using the supplied `window_size`.
 #'
-#' * `flank = TRUE`: Creates one window per feature
-#'   in `subset` that exactly flanks that specific feature using the supplied
-#'   `window_size`.
+#' Specify `k` and related arguments to use [knn_imp()], or `ncp` and related
+#' arguments to use [pca_imp()].
 #'
-#' Specify `k` and related arguments to use [knn_imp()], `ncp` and related
-#' arguments for [pca_imp()].
+#' @inheritSection pca_imp Performance tips
 #'
-#' @returns A numeric matrix of the same dimensions as `obj` with missing values
-#' imputed. When `dry_run = TRUE`, returns a `data.frame` of class `slideimp_tbl`
-#' with columns `start`, `end`, `window_n`, plus `subset_local` (and `target`
-#' when `flank = TRUE`).
+#' @returns If `dry_run = FALSE`, a numeric matrix of the same dimensions as
+#'   `obj`, with missing values imputed. The returned object has class
+#'   `slideimp_results`.
+#'
+#'   If `dry_run = TRUE`, a data frame of class `slideimp_tbl` with columns
+#'   `start`, `end`, and `window_n`, plus `subset_local` and, when
+#'   `flank = TRUE`, `target`.
 #'
 #' @examples
-#' # Generate sample data with missing values with 20 samples and 100 columns
-#' # where the column order is sorted (i.e., by genomic position)
 #' set.seed(1234)
+#'
+#' # Example data with 20 samples and 100 ordered columns
 #' beta_matrix <- sim_mat(20, 100)$input
 #' location <- 1:100
 #'
-#' # It's very useful to first perform a dry run to examine the calculated windows
-#' windows_statistics <- slide_imp(
+#' # First perform a dry run to inspect the calculated windows
+#' window_statistics <- slide_imp(
 #'   beta_matrix,
 #'   location = location,
 #'   window_size = 50,
 #'   overlap_size = 10,
 #'   min_window_n = 10,
-#'   dry_run = TRUE
+#'   dry_run = TRUE,
+#'   .progress = FALSE
 #' )
-#' windows_statistics
+#' window_statistics
 #'
-#' # Sliding Window K-NN imputation by specifying `k` (sliding windows)
+#' # Sliding-window K-NN imputation
 #' imputed_knn <- slide_imp(
 #'   beta_matrix,
 #'   location = location,
@@ -109,24 +117,23 @@ find_overlap_regions <- function(start, end) {
 #'   window_size = 50,
 #'   overlap_size = 10,
 #'   min_window_n = 10,
-#'   scale = FALSE # This argument belongs to PCA imputation and will be ignored
+#'   .progress = FALSE
 #' )
 #' imputed_knn
 #'
-#' # Sliding Window PCA imputation by specifying `ncp` (sliding windows)
-#' pca_knn <- slide_imp(
+#' # Sliding-window PCA imputation
+#' imputed_pca <- slide_imp(
 #'   beta_matrix,
 #'   location = location,
 #'   ncp = 2,
 #'   window_size = 50,
 #'   overlap_size = 10,
-#'   min_window_n = 10
+#'   min_window_n = 10,
+#'   .progress = FALSE
 #' )
-#' pca_knn
+#' imputed_pca
 #'
-#' # Sliding Window K-NN imputation with flanking windows (flank = TRUE)
-#' # Only the columns listed in `subset` are imputed; each uses its own
-#' # centered window of width `window_size`.
+#' # K-NN imputation with flanking windows
 #' imputed_flank <- slide_imp(
 #'   beta_matrix,
 #'   location = location,
@@ -134,7 +141,8 @@ find_overlap_regions <- function(start, end) {
 #'   window_size = 30,
 #'   flank = TRUE,
 #'   subset = c(10, 30, 70),
-#'   min_window_n = 5
+#'   min_window_n = 5,
+#'   .progress = FALSE
 #' )
 #' imputed_flank
 #'
@@ -152,16 +160,19 @@ slide_imp <- function(
   k = NULL,
   cores = 1,
   dist_pow = 0,
-  max_cache = 4,
   # PCA-specific parameters
   ncp = NULL,
   scale = TRUE,
   coeff.ridge = 1,
+  threshold = 1e-6,
   seed = NULL,
   row.w = NULL,
   nb.init = 1,
   maxiter = 1000,
   miniter = 5,
+  solver = c("auto", "exact", "lobpcg"),
+  lobpcg_control = NULL,
+  clamp = NULL,
   # Shared
   method = NULL,
   .progress = TRUE,
@@ -213,11 +224,17 @@ slide_imp <- function(
     checkmate::assert_int(k, lower = 1L, upper = min_window_n - 1L, null.ok = FALSE, .var.name = "k")
   } else if (!dry_run && imp_method == "pca") {
     method <- if (is.null(method)) "regularized" else match.arg(method, c("regularized", "EM"))
+    solver <- match.arg(solver)
     checkmate::assert_int(ncp,
       lower = 1, upper = min(min_window_n - 1L, min(nrow(obj), ncol(obj)) - 1L),
       .var.name = "ncp"
     )
+    # other PCA arguments, including `lobpcg_control`, are checked in pca_imp().
+    # do not resolve `lobpcg_control` here. The first successful PCA window needs
+    # the actual window size so pca_imp can apply solver = "auto". Its chosen
+    # concrete solver is then reused for later windows.
   }
+
   checkmate::assert_flag(.progress, .var.name = ".progress", null.ok = FALSE)
   checkmate::assert_flag(na_check, .var.name = "na_check")
 
@@ -317,11 +334,18 @@ slide_imp <- function(
   }
 
   # Sliding Imputation ----
-  result <- matrix(
-    0,
-    nrow = nrow(obj), ncol = ncol(obj),
-    dimnames = list(rownames(obj), colnames(obj))
-  )
+  result <- obj
+
+  copy_max_bytes <- 500 * 1024^2
+  copy_max_cols_per_chunk <- as.integer(copy_max_bytes %/% (max(1L, nrow(result)) * 8))
+  copy_col_chunk <- min(10000L, max(1L, copy_max_cols_per_chunk))
+
+  if (length(subset) > 0L) {
+    for (s in seq(1L, length(subset), by = copy_col_chunk)) {
+      e <- min(s + copy_col_chunk - 1L, length(subset))
+      result[, subset[s:e]] <- 0
+    }
+  }
 
   if (.progress) {
     message("Step 1/2: Imputing")
@@ -332,6 +356,11 @@ slide_imp <- function(
   # meta data
   fallback_flags <- logical(length(start))
   skipped_flags <- logical(length(start))
+
+  # for PCA with solver = "auto", let the first successful PCA window choose
+  # the concrete solver, then reuse that solver for the remaining windows.
+  pca_solver_current <- if (imp_method == "pca") solver else NULL
+  pca_solver_lock_window <- NA
   for (i in seq_along(start)) {
     if (.progress && (i %% n_steps == 0 || i == n_windows || i == 1)) {
       message(sprintf(" Processing window %d of %d", i, n_windows))
@@ -345,15 +374,17 @@ slide_imp <- function(
           knn_imp(
             obj = sub_mat, k = k, colmax = colmax, cores = cores,
             method = method, post_imp = post_imp, dist_pow = dist_pow,
-            max_cache = max_cache, na_check = FALSE,
+            na_check = FALSE, .progress = FALSE,
             subset = subset_list[[i]]
           )
         } else {
           pca_imp(
             obj = sub_mat, ncp = ncp, scale = scale, method = method,
-            coeff.ridge = coeff.ridge, seed = seed, nb.init = nb.init,
-            maxiter = maxiter, miniter = miniter, row.w = row.w,
-            na_check = FALSE, colmax = colmax, post_imp = post_imp
+            coeff.ridge = coeff.ridge, threshold = threshold, seed = seed,
+            nb.init = nb.init, maxiter = maxiter, miniter = miniter,
+            row.w = row.w, lobpcg_control = lobpcg_control, solver = pca_solver_current,
+            na_check = FALSE, colmax = colmax, post_imp = post_imp,
+            clamp = clamp
           )
         }
       ),
@@ -372,15 +403,28 @@ slide_imp <- function(
     fallback_flags[i] <- isTRUE(attr(imputed_window, "fallback"))
     skipped_flags[i] <- isTRUE(attr(imputed_window, "skipped"))
 
+    if (
+      imp_method == "pca" && solver == "auto" && pca_solver_current == "auto" &&
+        !fallback_flags[i]
+    ) {
+      chosen_solver <- attr(imputed_window, "solver_chosen", exact = TRUE)
+      if (
+        is.character(chosen_solver) && length(chosen_solver) == 1L && chosen_solver %in% c("exact", "lobpcg")
+      ) {
+        pca_solver_current <- chosen_solver
+        pca_solver_lock_window <- i
+      }
+    }
+
     if (skipped_flags[i]) {
       next
     }
 
-    if (flank) {
-      local_idx <- subset_list[[i]]
-      result[, window_cols[local_idx]] <- result[, window_cols[local_idx]] + imputed_window[, local_idx]
-    } else {
-      result[, window_cols] <- result[, window_cols] + imputed_window
+    local_idx <- subset_list[[i]]
+
+    if (length(local_idx) > 0L) {
+      global_idx <- window_cols[local_idx]
+      result[, global_idx] <- result[, global_idx, drop = FALSE] + imputed_window[, local_idx, drop = FALSE]
     }
   }
 
@@ -390,18 +434,20 @@ slide_imp <- function(
 
   if (flank) {
     # in flank mode each target column is imputed exactly once, no averaging needed.
-    # columns not targeted by any surviving window get original values.
+    # Columns not targeted by any surviving window, or skipped, get original values.
     skipped_targets <- target_cols[skipped_flags]
     uncovered <- union(setdiff(subset, target_cols), skipped_targets)
+
     if (length(uncovered) > 0) {
-      result[, uncovered] <- obj[, uncovered]
+      for (s in seq(1L, length(uncovered), by = copy_col_chunk)) {
+        e <- min(s + copy_col_chunk - 1L, length(uncovered))
+        cols <- uncovered[s:e]
+        result[, cols] <- obj[, cols, drop = FALSE]
+      }
+
       if (.progress) {
         message(sprintf("Note: %d column(s) not covered by any window; original values retained.", length(uncovered)))
       }
-    }
-    non_subset <- setdiff(seq_len(ncol(obj)), subset)
-    if (length(non_subset) > 0) {
-      result[, non_subset] <- obj[, non_subset]
     }
   } else {
     counts_vec <- overlap$counts_vec
@@ -415,15 +461,22 @@ slide_imp <- function(
         counts_vec[cols_i] <- counts_vec[cols_i] - 1L
       }
     }
-    # average only where multiple windows overlap
-    gt_1_idx <- which(counts_vec > 1)
+    # average only target columns where multiple non-skipped windows overlap.
+    target_counts <- counts_vec[subset]
+
+    gt_1_idx <- subset[target_counts > 1L]
     if (length(gt_1_idx) > 0) {
       result[, gt_1_idx] <- sweep(result[, gt_1_idx, drop = FALSE], 2, counts_vec[gt_1_idx], "/")
     }
-    # restore original values for columns not covered by any window
-    uncovered <- which(counts_vec == 0)
+
+    # restore original values for target columns not covered by any non-skipped window.
+    uncovered <- subset[target_counts == 0L]
     if (length(uncovered) > 0) {
-      result[, uncovered] <- obj[, uncovered]
+      for (s in seq(1L, length(uncovered), by = copy_col_chunk)) {
+        e <- min(s + copy_col_chunk - 1L, length(uncovered))
+        cols <- uncovered[s:e]
+        result[, cols] <- obj[, cols, drop = FALSE]
+      }
       if (.progress) {
         message(sprintf("Note: %d column(s) not covered by any window; original values retained.", length(uncovered)))
       }
@@ -439,11 +492,8 @@ slide_imp <- function(
     }
     has_remaining_na <- FALSE
     if (length(imputed_cols) > 0L) {
-      max_bytes <- 500 * 1024^2
-      max_cols_per_chunk <- as.integer(max_bytes %/% (nrow(result) * 8))
-      chunk <- min(10000L, max(1L, max_cols_per_chunk))
-      for (s in seq(1L, length(imputed_cols), by = chunk)) {
-        e <- min(s + chunk - 1L, length(imputed_cols))
+      for (s in seq(1L, length(imputed_cols), by = copy_col_chunk)) {
+        e <- min(s + copy_col_chunk - 1L, length(imputed_cols))
         if (anyNA(result[, imputed_cols[s:e], drop = FALSE])) {
           has_remaining_na <- TRUE
           break
@@ -463,5 +513,15 @@ slide_imp <- function(
   attr(result, "has_remaining_na") <- has_remaining_na
   attr(result, "flank") <- flank
   attr(result, "post_imp") <- post_imp
+  if (imp_method == "pca") {
+    attr(result, "solver_requested") <- solver
+    attr(result, "solver_chosen") <- if (solver == "auto") {
+      if (is.na(pca_solver_lock_window)) NA else pca_solver_current
+    } else {
+      solver
+    }
+    attr(result, "solver_lock_window") <- pca_solver_lock_window
+  }
+
   result
 }

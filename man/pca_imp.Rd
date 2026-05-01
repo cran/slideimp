@@ -2,7 +2,7 @@
 % Please edit documentation in R/pca_imp.R
 \name{pca_imp}
 \alias{pca_imp}
-\title{Impute Numeric Matrix with PCA Imputation}
+\title{PCA Imputation for Numeric Matrices}
 \usage{
 pca_imp(
   obj,
@@ -16,79 +16,135 @@ pca_imp(
   nb.init = 1,
   maxiter = 1000,
   miniter = 5,
+  solver = c("auto", "exact", "lobpcg"),
+  lobpcg_control = NULL,
   colmax = 0.9,
   post_imp = TRUE,
-  na_check = TRUE
+  na_check = TRUE,
+  clamp = NULL
 )
 }
 \arguments{
-\item{obj}{A numeric matrix with \strong{samples in rows} and \strong{features in columns}.}
+\item{obj}{A numeric matrix with samples in rows and features in columns.}
 
-\item{ncp}{Integer. Number of components used to predict the missing entries.}
+\item{ncp}{Integer. Number of principal components used to predict missing
+entries.}
 
-\item{scale}{Logical. If \code{TRUE} (default), variables are scaled to have
-unit variance.}
+\item{scale}{Logical. If \code{TRUE}, columns are scaled to unit variance.}
 
-\item{method}{Character. Either \code{"regularized"} (default) or \code{"EM"}.}
+\item{method}{Character. PCA imputation method: either \code{"regularized"} or
+\code{"EM"}.}
 
-\item{coeff.ridge}{Numeric. Ridge regularization coefficient (default is 1).
-Only used if \code{method = "regularized"}. Values < 1 regularize less (closer
-to EM); values > 1 regularize more (closer to mean imputation).}
+\item{coeff.ridge}{Numeric. Ridge regularization coefficient. Only used when
+\code{method = "regularized"}. Values less than \code{1} regularize less, moving
+closer to EM PCA. Values greater than \code{1} regularize more, moving closer
+to mean imputation.}
 
-\item{row.w}{Row weights (internally normalized to sum to 1). Can be one of:
+\item{row.w}{Row weights, internally normalized to sum to \code{1}. Can be:
 \itemize{
-\item \code{NULL} (default): All rows weighted equally.
-\item A numeric vector: Custom positive weights of length \code{nrow(obj)}.
-\item \code{"n_miss"}: Rows with more missing values receive lower weight.
+\item \code{NULL}: all rows are weighted equally.
+\item A numeric vector of positive weights with length \code{nrow(obj)}.
+\item \code{"n_miss"}: rows with more missing values receive lower weight.
 }}
 
-\item{threshold}{Numeric. The threshold for assessing convergence.}
+\item{threshold}{Numeric. Convergence threshold.}
 
-\item{seed}{Integer. Random number generator seed.}
+\item{seed}{Integer, numeric, or \code{NULL}. Random seed for reproducibility.}
 
 \item{nb.init}{Integer. Number of random initializations. The first
 initialization is always mean imputation.}
 
-\item{maxiter}{Integer. Maximum number of iterations for the algorithm.}
+\item{maxiter}{Integer. Maximum number of iterations.}
 
-\item{miniter}{Integer. Minimum number of iterations for the algorithm.}
+\item{miniter}{Integer. Minimum number of iterations.}
 
-\item{colmax}{Numeric. A number from 0 to 1. Threshold of column-wise missing
-data rate above which imputation is skipped.}
+\item{solver}{Character. Eigensolver selection. One of \code{"auto"}, \code{"exact"},
+or \code{"lobpcg"}. \code{"exact"} uses the exact solver. \code{"lobpcg"} uses the
+iterative LOBPCG solver with exact fallback. \code{"auto"} performs a short
+timed probe and chooses LOBPCG only if it is clearly faster than the exact
+solver. When \code{nb.init > 1}, the auto choice from the first PCA initialization
+is reused for subsequent PCA initializations.}
 
-\item{post_imp}{Boolean. Whether to impute remaining missing values (those
-that failed imputation) using column means.}
+\item{lobpcg_control}{A list of LOBPCG eigensolver control options, usually
+created by \code{\link[=lobpcg_control]{lobpcg_control()}}. A plain named list is also accepted. Ignored
+when \code{solver = "exact"}.}
 
-\item{na_check}{Boolean. Check for leftover \code{NA} values in the results or not
-(internal use).}
+\item{colmax}{Numeric scalar between \code{0} and \code{1}. Columns with a missing-data
+proportion greater than \code{colmax} are excluded from the main imputation
+method. Excluded columns are left unchanged unless \code{post_imp = TRUE}, in
+which case remaining missing values are replaced by column means when
+possible.}
+
+\item{post_imp}{Logical. If \code{TRUE}, replace missing values remaining after
+the main imputation method with column means when possible.}
+
+\item{na_check}{Logical. If \code{TRUE}, check whether the returned matrix still
+contains missing values.}
+
+\item{clamp}{Optional numeric vector of length 2 giving lower and upper bounds
+for PCA-imputed values. Use \code{NULL} for no clamping. Use \code{c(0, 1)} for DNA
+methylation beta values. Use \code{c(lb, Inf)} for only lower bound clamping, or
+\code{c(-Inf, ub)} for only upper bound clamping. Clamping is applied only to
+values imputed by the PCA step, not to observed values.}
 }
 \value{
-A numeric matrix of the same dimensions as \code{obj} with missing
-values imputed.
+A numeric matrix of the same dimensions as \code{obj}, with missing
+values imputed. The returned object has class \code{slideimp_results}.
 }
 \description{
-Impute missing values in a numeric matrix using (regularized) iterative PCA.
+Impute missing values in a numeric matrix using regularized or
+expectation-maximization PCA imputation.
 }
 \details{
-This algorithm is based on the original \code{missMDA::imputePCA} function and is
-optimized for tall or wide numeric matrices.
+This algorithm is based on \code{missMDA::imputePCA()} and is optimized for tall
+or wide numeric matrices.
 }
+\section{Performance tips}{
+
+\code{pca_imp()} relies heavily on linear algebra. On Windows, the default BLAS
+shipped with R may be slow for large matrices. Advanced users can replace
+it with \href{https://github.com/david-cortes/R-openblas-in-windows}{OpenBLAS}.
+
+PCA imputation speed depends on the eigensolver selected by \code{solver} and the
+convergence threshold \code{threshold}. The exact solver is selected with
+\code{solver = "exact"}. The iterative LOBPCG solver is selected with
+\code{solver = "lobpcg"}. The default, \code{solver = "auto"}, performs a short timed
+probe and chooses LOBPCG only when it is clearly faster.
+
+For large or approximately low-rank genomic matrices, it can be useful to
+benchmark \code{solver = "exact"} against \code{solver = "lobpcg"} on a representative
+subset, such as chromosome 22, before tuning accuracy-related parameters.
+For \code{slide_imp()}, this may include \code{window_size} and \code{overlap_size}.
+
+The default \code{threshold = 1e-6} is conservative. In many genomic datasets,
+\code{threshold = 1e-5} can be faster while giving very similar imputed values.
+Check this on a representative subset before using the relaxed threshold in a
+full analysis.
+
+See the pkgdown article
+\href{https://hhp94.github.io/slideimp/articles/speeding-up-pca-imputation.html}{Speeding up PCA imputation}
+for a full workflow.
+}
+
 \examples{
+set.seed(123)
 obj <- sim_mat(10, 10)$input
 sum(is.na(obj))
 obj[1:4, 1:4]
-# Randomly initialize missing values 5 times (1st time is mean).
-pca_imp(obj, ncp = 2, nb.init = 5)
+
+# Randomly initialize missing values 5 times. The first initialization is
+# mean imputation.
+pca_imp(obj, ncp = 2, nb.init = 5, seed = 123)
 
 }
 \references{
-Josse, J. & Husson, F. (2013). Handling missing values in exploratory
-multivariate data analysis methods. Journal de la SFdS. 153 (2), pp. 79-99.
+Josse J, Husson F (2013). Handling missing values in exploratory
+multivariate data analysis methods. \emph{Journal de la SFdS}, 153(2), 79-99.
 
-Josse, J. and Husson, F. (2016). missMDA: A Package for Handling Missing
-Values in Multivariate Data Analysis. Journal of Statistical Software,
-70 (1), pp 1-31. \doi{10.18637/jss.v070.i01}
-}
-\author{
-Francois Husson and Julie Josse (original \code{missMDA} implementation).
+Josse J, Husson F (2016). missMDA: A Package for Handling Missing Values in
+Multivariate Data Analysis. \emph{Journal of Statistical Software}, 70(1), 1-31.
+\doi{10.18637/jss.v070.i01}
+
+The PCA imputation algorithm is based on the original \code{missMDA}
+implementation by Francois Husson and Julie Josse.
 }
