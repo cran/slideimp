@@ -2,7 +2,7 @@
 % Please edit documentation in R/knn_imp.R
 \name{knn_imp}
 \alias{knn_imp}
-\title{K-Nearest-Neighbor Imputation for Numeric Matrices}
+\title{K-Nearest Neighbor Imputation for Numeric Matrices}
 \usage{
 knn_imp(
   obj,
@@ -13,7 +13,6 @@ knn_imp(
   post_imp = TRUE,
   subset = NULL,
   dist_pow = 0,
-  tree = FALSE,
   na_check = TRUE,
   .progress = FALSE
 )
@@ -45,9 +44,6 @@ target for imputation. If \code{NULL}, all eligible columns are targeted.}
 the weighted average. \code{dist_pow = 0} gives an unweighted average of the
 nearest neighbors.}
 
-\item{tree}{Logical. If \code{FALSE}, use brute-force K-NN. If \code{TRUE}, use
-ball-tree K-NN via \code{mlpack}.}
-
 \item{na_check}{Logical. If \code{TRUE}, check whether the returned matrix still
 contains missing values.}
 
@@ -58,30 +54,22 @@ A numeric matrix of the same dimensions as \code{obj}, with missing
 values imputed. The returned object has class \code{slideimp_results}.
 }
 \description{
-Impute missing values in a numeric matrix using k-nearest neighbors
-(K-NN).
+Impute missing values in a numeric matrix using full K-nearest neighbors (K-NN).
 }
 \details{
 \code{knn_imp()} performs imputation column-wise, treating rows as observations
 and columns as features.
 
+Nearest neighbors are found using brute-force K-NN.
+
 When \code{dist_pow > 0}, imputed values are computed as distance-weighted
 averages. Weights are inverse distances raised to the power of \code{dist_pow}.
-
-If \code{tree = TRUE}, nearest neighbors are found with a ball tree via the
-\code{mlpack} package. This can be faster for some large, low-missingness data
-sets, but it requires initially filling missing values with column means,
-which can introduce bias when missingness is high.
 }
 \section{K-NN performance optimization}{
 
 \itemize{
-\item \code{tree = FALSE} uses brute-force K-NN. This avoids the initial mean-filling
-step and is often faster for small to moderate datasets or high-dimensional
-data.
-\item \code{tree = TRUE} uses ball-tree K-NN. Consider this only when run time is
-prohibitive and missingness is low, for example less than 5\%.
 \item Use \code{subset} when only specific columns need imputation.
+\item Use grouped or sliding-window imputation for very large matrices.
 }
 }
 
@@ -90,6 +78,7 @@ set.seed(123)
 obj <- sim_mat(20, 20, perc_col_na = 1)$input
 sum(is.na(obj))
 
+# Select `k` with `tune_imp()`.
 result <- knn_imp(obj, k = 10, .progress = FALSE)
 result
 

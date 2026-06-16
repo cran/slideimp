@@ -1,3 +1,29 @@
+# slideimp 1.2.0
+
+## Breaking changes
+
+* `knn_imp()` no longer supports Ball Tree-based imputation due to lower 
+accuracy compared to brute-force K-NN.
+
+## New features
+
+* `pca_imp()` gained a `.progress` argument to display imputation progress.
+
+## Minor improvements and fixes
+
+* Fixed `pca_imp()` tests that broke due to upstream changes in
+`missMDA::imputePCA()` and `FactoMineR::svd.triplet()`.
+
+* Implemented an internal `.crate()` function, a minimal version of 
+`carrier::crate()`.
+
+* `DESCRIPTION` now describes the LOBPCG eigensolver and its warm-start
+behavior across EM iterations in `pca_imp()`.
+
+* Minor wording improvements.
+
+* Added citation information.
+
 # slideimp 1.1.0
 
 ## Breaking changes

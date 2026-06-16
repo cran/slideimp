@@ -9,7 +9,26 @@
 <!-- badges: end -->
 
 `{slideimp}` is a lightweight R package for fast K-NN and PCA imputation
-of missing values in high-dimensional numeric matrices.
+of missing values in high-dimensional numeric matrices (samples in rows,
+variables in columns). Two “meta-callers” wrap the workhorse functions
+`knn_imp()` and `pca_imp()`:
+
+- `group_imp()`: group-wise K-NN or PCA imputation (e.g., by chromosome
+  for Illumina DNAm microarrays such as 450K, EPIC, EPICv2, MSA).
+
+- `slide_imp()`: sliding window K-NN or PCA imputation for whole-genome
+  methylation data (WGBS, EM-seq). **Note**: not intended for Illumina
+  microarrays, use `group_imp()` instead.
+
+- `pca_imp()`: Optimized reimplementation of
+  [`missMDA::imputePCA()`](http://factominer.free.fr/missMDA/PCA.html)
+  for high-dimensional matrices. Supports a LOBPCG eigensolver that
+  warm-starts each EM iteration from the previous eigenblock and search
+  direction.
+
+- `knn_imp()`: Full K-NN imputation with `{RcppThread}` multi-threading.
+  Supports `subset` imputation to restrict work to specific columns
+  (e.g., clock CpGs) for very fast targeted imputation.
 
 ## Installation
 
@@ -31,6 +50,25 @@ You can install the optional
 
 ``` r
 pak::pkg_install("hhp94/slideimp.extra")
+```
+
+## Citation
+
+If you find `{slideimp}` helpful in your work, please cite our
+Bioinformatics paper:
+
+``` bibtex
+@article{10.1093/bioinformatics/btag318,
+    author = {Pham, Hung and Lombroso, Adam P and Cevik, Esma Cansu and Taylor, Hugh S and O'Donnell, Kieran J},
+    title = {slideimp: efficient imputation of {DNA} methylation data},
+    journal = {Bioinformatics},
+    volume = {42},
+    number = {6},
+    pages = {btag318},
+    year = {2026},
+    doi = {10.1093/bioinformatics/btag318},
+    month = jun,
+}
 ```
 
 ## PCA or K-NN imputation of Illumina DNAm microarrays
@@ -65,7 +103,7 @@ library(slideimp)
 imputed <- group_imp(
   obj = MSA_beta_matrix,
   group = "MSA", # <- this feature requires the `slideimp.extra` package
-  ncp = 10, # <- change to `k` for K-NN imputation
+  ncp = 10, # <- change to `k` for K-NN imputation. Optimal value requires `tune_imp()`.
   clamp = c(0, 1), # <- PCA imputation can generate values outside of `c(0, 1)`
   .progress = FALSE # <- turn on to monitor progress of longer running jobs
 )
@@ -90,20 +128,19 @@ print(imputed, n = 4, p = 4)
 ### Troubleshooting tips
 
 - `group_imp()` fails with unmapped probes: your matrix likely contains
-  [`sesame`](https://bioconductor.org/packages/release/bioc/html/sesame.html)
-  generated control probes (prefixed `ctl_`) or you picked the wrong
-  manifest (`"EPICv2"` vs. `"EPICv2_deduped"`). Check the manifest,
-  remove `"ctl"` probes with
-  `obj <- obj[, !grepl("^ctl", colnames(obj))]`, or pass
-  `allow_unmapped = TRUE` to bypass.
+  [`sesame`](https://bioconductor.org/packages/release/bioc/html/sesame.html)-generated
+  control probes (prefixed `ctl_`) or you picked the wrong manifest
+  (`"EPICv2"` vs. `"EPICv2_deduped"`). Check the manifest, remove
+  `"ctl"` probes with `obj <- obj[, !grepl("^ctl", colnames(obj))]`, or
+  pass `allow_unmapped = TRUE` to bypass.
 - Impute the MSA or EPICv2 data **with** the duplicated probes, then
   dedup with `slideimp.extra::dedup_matrix()`.
 
 ### Performance tips
 
-- For PCA performance tuning, including guidance on choosing
-  `threshold`, selecting `solver`, configuring `lobpcg_control`, and
-  using `{mirai}` or BLAS threading effectively, see [Speeding up PCA
+- For tips on the `solver` choice and LOBPCG warm-start, plus
+  `threshold`, `scale`, `lobpcg_control`, and `{mirai}`/BLAS threading,
+  see [Speeding up PCA
   imputation](https://hhp94.github.io/slideimp/articles/speeding-up-pca-imputation.html).
 - For PCA imputation of bounded data, i.e., DNA methylation beta values,
   use `clamp = c(0, 1)` to restrict PCA-imputed values to the valid
@@ -129,15 +166,15 @@ library(slideimp)
 set.seed(1234)
 sim_obj <- sim_mat(n = 20, p = 100, n_col_groups = 2)
 
-# Extract the $input attribute
+# `input` holds the simulated matrix with missing data
 obj <- sim_obj$input
 
-# Extract metadata to map the features to groups
+# `col_group` holds the column-wise grouping
 group_df <- sim_obj$col_group
 ```
 
 - Hyperparameters are tuned using `tune_imp()`. We evaluate the
-  following options with grid search:
+  following options with grid search (K-NN imputation):
 
   - Number of nearest neighbors (`k`): 5 or 20
   - Inverse distance power (`dist_pow`) for weighted averaging: 1 or 2
@@ -149,8 +186,8 @@ group_df <- sim_obj$col_group
   Use larger values for both `n_reps` and `num_na` in real analyses for
   more reliable error estimates.
 
-- **Note:** Parallelization via the `cores` argument is only available
-  for K-NN imputation with `{RcppThread}`.
+- **Note:** Parallelization via the `cores` argument (which uses
+  `{RcppThread}`) is only available for K-NN imputation.
 
 ``` r
 knn_params <- expand.grid(k = c(5, 20), dist_pow = c(1, 2))
@@ -161,7 +198,7 @@ tune_knn <- tune_imp(
   group2_only,
   parameters = knn_params,
   .f = "knn_imp",
-  cores = 8,
+  cores = 8, # <- only available for K-NN imputation
   n_reps = 10,
   num_na = 50
 )
@@ -176,19 +213,14 @@ tune_knn <- tune_imp(
 ``` r
 metrics <- compute_metrics(tune_knn)
 
-# equivalently: dplyr::summarize(metrics, ..., .by = c(k, dist_pow, .metric))
+# Equivalently: dplyr::summarize(metrics, n = n(), mean_error = mean(.estimate),
+# sd_error = sd(.estimate), .by = c(k, dist_pow, .metric))
 sum_metrics <- do.call(
   data.frame,
   aggregate(
     .estimate ~ k + dist_pow + .metric,
     data = metrics,
-    FUN = function(x) {
-      c(
-        n = length(x),
-        mean_error = mean(x),
-        sd_error = sd(x)
-      )
-    }
+    FUN = function(x) c(n = length(x), mean_error = mean(x), sd_error = sd(x))
   )
 )
 
@@ -243,12 +275,10 @@ knn_group_results
 #> # Showing 6 of 20 rows and 6 of 100 columns
 ```
 
-- PCA imputation with `group_imp()` can be parallelized using the
-  `{mirai}` package, similar to `tune_imp()`. `pin_blas = TRUE` can help
-  PCA imputation on multi-threaded BLAS machines.
+- PCA imputation with `group_imp()` can be parallelized with `{mirai}`,
+  as with `tune_imp()`.
 
 ``` r
-# Similar to `tune_imp`, parallelization is controlled by `mirai::daemons()`
 mirai::daemons(2)
 pca_group_results <- group_imp(obj, group = group_df, ncp = 10)
 mirai::daemons(0)
@@ -277,42 +307,31 @@ full_pca_results <- pca_imp(obj = obj, ncp = 10)
 ``` r
 # Simulate some data
 chr1_beta <- sim_mat(n = 10, p = 2000)$input
-dim(chr1_beta)
-#> [1]   10 2000
-chr1_beta[1:5, 1:5]
-#>          feature1  feature2  feature3   feature4  feature5
-#> sample1 0.7500638 0.5323295 0.6095626 0.96762386 0.5149855
-#> sample2 0.2809107 0.8695599        NA         NA 0.6040981
-#> sample3 0.9409348 0.5445597 0.6432675 1.00000000 0.5613868
-#> sample4 0.5946795 0.0000000        NA 0.07237333 0.4410413
-#> sample5 0.8664253 0.6206139 0.3444691 0.52025046 0.5220036
 ```
 
 - `slide_imp()` parameters:
 
-  - `location`: **required** - a sorted numeric vector of length
-    `ncol(obj)` specifying the position of each column (e.g., genomic
-    coordinates in *bp*).
-  - `window_size`: **required** - width of each sliding window (same
-    unit as `location`).
-  - `overlap_size`: **optional** - overlap width between consecutive
-    windows (same units as `location`). Must be strictly less than
-    `window_size`.
-  - `min_window_n`: **required** - minimum number of columns a window
-    must contain to be imputed. Windows with fewer columns than this
+  - `location` (required): a sorted numeric vector of length `ncol(obj)`
+    specifying the position of each column (e.g., genomic coordinates in
+    *bp*).
+  - `window_size` (required): width of each sliding window (same unit as
+    `location`).
+  - `overlap_size`: overlap width between consecutive windows (same
+    units as `location`). Must be strictly less than `window_size`.
+  - `min_window_n` (required): minimum number of columns a window must
+    contain to be imputed. Windows with fewer columns than this
     threshold are dropped. Must be greater than `k` (for K-NN) or `ncp`
     (for PCA).
-  - `dry_run`: **optional** - return just the calculated windows to
-    examine which windows are included.
-  - `k`: **required** - *(specifying K-NN imputation)* number of nearest
+  - `dry_run`: return only the calculated windows to inspect which are
+    included.
+  - `k` (required): *(specifying K-NN imputation)* number of nearest
     neighbors to use inside each window.
-  - `ncp`: **required** - *(specifying PCA imputation)* number of
-    principal components to retain. Use this instead of `k` when
-    performing sliding-window PCA imputation.
-  - `subset`: **optional** - impute just a subset of features (i.e.,
-    just clock CpGs).
-  - `flank`: **optional** - build flanking windows of `window_size`
-    around features provided in `subset`.
+  - `ncp` (required): *(specifying PCA imputation)* number of principal
+    components to retain. Use this instead of `k` when performing
+    sliding-window PCA imputation.
+  - `subset`: impute only a subset of features (e.g., clock CpGs).
+  - `flank`: build flanking windows of `window_size` around features
+    provided in `subset`.
 
 - First, let’s perform a dry run to examine the windows that will be
   imputed by `slide_imp`.
@@ -369,33 +388,8 @@ slide_imp(
 #> # Showing 6 of 10 rows and 6 of 2000 columns
 ```
 
-## Core functions
+## Other functions
 
-- `group_imp()`: Parallelizable group-wise (e.g., by chromosomes or
-  column clusters) K-NN or PCA imputation with optional auxiliary
-  features and group-wise parameters. The `group` argument supports:
-  - Choices such as `"EPICv2"` or `"MSA"` (requires the
-    [`slideimp.extra`](https://github.com/hhp94/slideimp.extra)
-    package).
-  - (Basic): a `data.frame` containing a `feature` column (character
-    strings of feature names) and a `group` column (defining the group).
-  - (Advanced): use `prep_groups()` to create groups based on a mapping
-    data.frame (i.e., Illumina manifests) with custom group-wise
-    parameters.
-- `slide_imp()`: Sliding window K-NN or PCA imputation for extremely
-  high-dimensional numeric matrices (WGBS/EM-seq) with ordered features
-  (i.e., by genomic position).
-- `tune_imp()`: Parallelizable hyperparameter tuning with repeated
-  cross-validation that works with built-in or custom imputation
-  functions.
-- `knn_imp()`: Full-matrix K-NN imputation with multi-core
-  parallelization, [`mlpack`](https://mlpack.org/) KD/Ball-Tree nearest
-  neighbor implementation (for data with very low missing rates and
-  extremely high dimensions), and optional subset imputation (ideal for
-  epigenetic clock calculations).
-- `pca_imp()`: Optimized version of
-  [`missMDA::imputePCA()`](http://factominer.free.fr/missMDA/PCA.html)
-  for high-dimensional numeric matrices.
-- `col_vars()` and `mean_imp_col()` provide fast column-wise variance
-  and mean imputation using the high-performance `{RcppArmadillo}`
-  backend with full `{RcppThread}` parallelization support.
+- `col_vars()` / `mean_imp_col()`: Fast column-wise variance and mean
+  imputation via `{RcppArmadillo}` and `{RcppThread}`.
+- `mat_miss()`: Efficient column or row missing statistics.
