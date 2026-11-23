@@ -1,9 +1,13 @@
-#' Validate Clamp Bounds
+#' Validated Clamp Bounds
 #'
-#' @param clamp `NULL` or a numeric vector of length 2.
-#' @param arg Argument name used in error messages.
+#' Checks `clamp` and returns it as `c(lower, upper)`, or `NULL` for no
+#' clamping.
 #'
-#' @return `NULL` or an unnamed numeric vector of length 2.
+#' @param clamp Numeric or `NULL`. The `clamp` argument as the user passed it.
+#' @param arg Character. The argument name the error messages give. Defaults
+#'   to `"clamp"`.
+#'
+#' @returns `NULL` or an unnamed numeric vector of length 2.
 #'
 #' @keywords internal
 #' @noRd
@@ -15,8 +19,7 @@ resolve_clamp <- function(clamp, arg = "clamp") {
   if (length(clamp) == 1L) {
     cli::cli_abort(c(
       "{.arg {arg}} must be a numeric vector of length 2: {.code c(lower, upper)}.",
-      "i" = "For upper-bound-only clamping, use {.code c(-Inf, upper)}.",
-      "i" = "For lower-bound-only clamping, use {.code c(lower, Inf)}."
+      "i" = "Use {.code c(-Inf, upper)} or {.code c(lower, Inf)} for one-sided clamping."
     ))
   }
 
@@ -31,8 +34,7 @@ resolve_clamp <- function(clamp, arg = "clamp") {
   if (anyNA(clamp)) {
     cli::cli_abort(c(
       "{.arg {arg}} cannot contain missing values.",
-      "i" = "Use {.code -Inf} or {.code Inf} for an open bound.",
-      "i" = "For example, use {.code c(-Inf, 1)} or {.code c(0, Inf)}, not {.code c(NA, 1)} or {.code c(0, NA)}."
+      "i" = "Use {.code -Inf} or {.code Inf} for an open bound, as in {.code c(-Inf, 1)}."
     ))
   }
 
@@ -47,7 +49,7 @@ resolve_clamp <- function(clamp, arg = "clamp") {
 
   if (clamp[1L] > clamp[2L]) {
     cli::cli_abort(
-      "{.arg {arg}} must be ordered as {.code c(lower, upper)} with lower <= upper."
+      "{.arg {arg}} must be {.code c(lower, upper)} with lower <= upper."
     )
   }
 
@@ -57,18 +59,22 @@ resolve_clamp <- function(clamp, arg = "clamp") {
 #' LOBPCG Eigensolver Control Options
 #'
 #' Construct a validated list of control options for the LOBPCG eigensolver
-#' used by [pca_imp()]. Most users do not need to call this directly.
+#' used by [pca_imp()]. Most users do not need to call it.
 #'
-#' @param warmup_iters Integer. Number of warm-up iterations before the main
-#'   LOBPCG solve. Must be non-negative.
+#' @param warmup_iters Integer. Number of initial [pca_imp()] iterations that
+#'   use the exact eigensolver before LOBPCG starts. Must be non-negative.
 #' @param tol Numeric. Convergence tolerance for the LOBPCG eigensolver. Must
 #'   be non-negative and finite.
-#' @param maxiter Integer. Maximum number of LOBPCG iterations. Must be
-#'   non-negative. In [pca_imp()], `maxiter` must be positive when
-#'   `solver = "auto"` or `solver = "lobpcg"`. Use `solver = "exact"` to force
-#'   the exact solver.
+#' @param maxiter Integer. Maximum number of LOBPCG iterations per eigenvalue
+#'   solve. Must be non-negative, and positive when [pca_imp()] runs with
+#'   `solver = "auto"` or `"lobpcg"`. Use `solver = "exact"`, not
+#'   `maxiter = 0`, to select the exact solver.
 #'
-#' @returns A named list of class `"slideimp_lobpcg_control"` containing
+#' @details
+#' Under `solver = "auto"`, [pca_imp()] raises a `warmup_iters` that was not
+#' set for a large `ncp`, up to `50`. Set `warmup_iters` to keep a fixed value.
+#'
+#' @returns A `slideimp_lobpcg_control` object: a named list with
 #' `warmup_iters`, `tol`, and `maxiter`.
 #'
 #' @examples
@@ -85,7 +91,7 @@ resolve_clamp <- function(clamp, arg = "clamp") {
 #' pca_imp(obj, ncp = 2, solver = "exact")
 #'
 #' # Pass directly to pca_imp()
-#' pca_imp(obj, ncp = 2, lobpcg_control = lobpcg_control(tol = 1e-9))
+#' pca_imp(obj, ncp = 2, lobpcg_control = lobpcg_control(tol = 1e-8))
 #'
 #' # Or use a named list
 #' pca_imp(obj, ncp = 2, lobpcg_control = list(maxiter = 50))
@@ -98,22 +104,8 @@ lobpcg_control <- function(warmup_iters = 10L, tol = 1e-9, maxiter = 20) {
     maxiter = !missing(maxiter)
   )
 
-  checkmate::assert_int(
-    warmup_iters,
-    lower = 0L,
-    .var.name = "warmup_iters"
-  )
-  checkmate::assert_number(
-    tol,
-    lower = 0,
-    finite = TRUE,
-    .var.name = "tol"
-  )
-  checkmate::assert_int(
-    maxiter,
-    lower = 0L,
-    .var.name = "maxiter"
-  )
+  check_lobpcg_fields(warmup_iters, tol, maxiter)
+
   structure(
     list(
       warmup_iters = as.integer(warmup_iters),
@@ -125,27 +117,63 @@ lobpcg_control <- function(warmup_iters = 10L, tol = 1e-9, maxiter = 20) {
   )
 }
 
-#' Validate a LOBPCG Control Object
+#' LOBPCG Control Field Rules
 #'
-#' @description
-#' Internal helper that accepts `NULL`, a `"slideimp_lobpcg_control"` object,
-#' or a (partial) named list, and returns a fully validated control object.
-#' Used by [pca_imp()] to normalize the `lobpcg_control` argument before
-#' dispatching to the C++ backend.
+#' Holds the field rules for a LOBPCG control object, so that
+#' [lobpcg_control()] and `new_lobpcg_control()` cannot drift apart. The latter
+#' re-checks an object that already carries the class, because a control
+#' object is an ordinary list that a caller can assign into after construction.
 #'
-#' @param x `NULL`, a `"slideimp_lobpcg_control"` object, or a named list.
+#' @param warmup_iters,tol,maxiter Numeric. The three control fields, as
+#'   [lobpcg_control()] takes them.
+#' @param prefix Character. The prefix for each `.var.name`, so the message
+#'   names the argument the user passed. Defaults to `""`.
 #'
-#' @returns A `"slideimp_lobpcg_control"` object.
+#' @returns `NULL`, invisibly. Called for the side effect of aborting.
 #'
 #' @keywords internal
 #' @noRd
-new_lobpcg_control <- function(
-  x,
-  ncp = NULL,
-  n = NULL,
-  p = NULL,
-  solver = c("auto", "exact", "lobpcg")
-) {
+check_lobpcg_fields <- function(warmup_iters, tol, maxiter, prefix = "") {
+  # `assert_int` rejects anything outside integer range as non-integerish, so
+  # a value too large for the `int` the C++ backend takes cannot get past
+  # here; no explicit upper bound is needed for it.
+  checkmate::assert_int(
+    warmup_iters,
+    lower = 0L,
+    .var.name = paste0(prefix, "warmup_iters")
+  )
+  checkmate::assert_number(
+    tol,
+    lower = 0,
+    finite = TRUE,
+    .var.name = paste0(prefix, "tol")
+  )
+  checkmate::assert_int(
+    maxiter,
+    lower = 0L,
+    .var.name = paste0(prefix, "maxiter")
+  )
+  invisible(NULL)
+}
+
+#' Validated LOBPCG Control Object
+#'
+#' Turns the `lobpcg_control` argument of [pca_imp()] into a validated
+#' `slideimp_lobpcg_control` object. It takes `NULL`, a
+#' `slideimp_lobpcg_control` object, or a partial named list. With
+#' `solver = "exact"` it returns `lobpcg_control(maxiter = 0L)` and ignores
+#' `x`.
+#'
+#' @param x A `slideimp_lobpcg_control` object, a named list, or `NULL`. The
+#'   `lobpcg_control` argument as the user passed it.
+#' @param solver Character. One of `"auto"`, `"exact"`, or `"lobpcg"`. The
+#'   solver that [pca_imp()] resolved.
+#'
+#' @returns A `slideimp_lobpcg_control` object.
+#'
+#' @keywords internal
+#' @noRd
+new_lobpcg_control <- function(x, solver = c("auto", "exact", "lobpcg")) {
   solver <- match.arg(solver)
   # force exact solver. This overrides any lobpcg_control supplied.
   if (solver == "exact") {
@@ -157,34 +185,56 @@ new_lobpcg_control <- function(
   if (is.null(x)) {
     return(lobpcg_control())
   }
-  # validate an already created control object.
+  # validate an already created control object. It is an ordinary list, so
+  # its fields can be changed after construction (`ctrl$tol <- -1`); re-check
+  # them against the constructor's rules.
+  control_names <- names(formals(lobpcg_control))
   if (inherits(x, "slideimp_lobpcg_control")) {
+    checkmate::assert_list(
+      x,
+      types = c("numeric", "integer"),
+      any.missing = FALSE,
+      names = "unique",
+      .var.name = "lobpcg_control"
+    )
+    absent <- setdiff(control_names, names(x))
+    if (length(absent) > 0L) {
+      cli::cli_abort(c(
+        "{.arg lobpcg_control} is missing {cli::qty(length(absent))}field{?s} {.field {absent}}.",
+        "i" = "Rebuild it with {.fn lobpcg_control}."
+      ))
+    }
+    check_lobpcg_fields(
+      x$warmup_iters,
+      x$tol,
+      x$maxiter,
+      prefix = "lobpcg_control$"
+    )
     out <- x
   } else {
     if (!is.list(x)) {
       cli::cli_abort(
-        "{.arg lobpcg_control} must be {.code NULL}, a list, or created by {.fn lobpcg_control}."
+        "{.arg lobpcg_control} must be {.code NULL}, a named list, or the output of {.fn lobpcg_control}."
       )
     }
     if (length(x) > 0L && (is.null(names(x)) || any(!nzchar(names(x))))) {
       cli::cli_abort("{.arg lobpcg_control} must be a named list.")
     }
-    allowed <- names(formals(lobpcg_control))
-    unknown <- setdiff(names(x), allowed)
+    unknown <- setdiff(names(x), control_names)
     if (length(unknown) > 0L) {
       cli::cli_abort(c(
-        "{cli::qty(length(unknown))}Unknown LOBPCG control option{?s}: {fmt_trunc(unknown, 10)}.",
-        "i" = "Allowed options are: {.arg {allowed}}."
+        "{length(unknown)} unknown option{?s} in {.arg lobpcg_control}:",
+        "x" = "{fmt_trunc(unknown, 10)}",
+        "i" = "Allowed: {.arg {control_names}}."
       ))
     }
     out <- do.call(lobpcg_control, x)
   }
-  control_names <- names(formals(lobpcg_control))
   explicit <- attr(out, "explicit", exact = TRUE)
 
   if (is.null(explicit)) {
-    # old or manually constructed control objects: treat all fields as explicit
-    # to avoid silently overriding user intent.
+    # a control object without the attribute: treat all fields as explicit,
+    # so none is overridden.
     explicit <- stats::setNames(rep(TRUE, length(control_names)), control_names)
   } else {
     missing_explicit <- setdiff(control_names, names(explicit))
@@ -205,75 +255,160 @@ new_lobpcg_control <- function(
   out
 }
 
+# What pca_imp() reports about a call: the attributes of its result, in the
+# order it sets them. Shared by the no-missing-values exit and the main path so that a caller cannot tell from
+# the result which one ran: the same fields with the same types. The defaults
+# describe a call that ran no solve. No solver was chosen or probed, no
+# iteration ran, and `converged` is NA because there was nothing to converge.
+# `n_iter` is an integer on both paths: the kernel returns its count as one.
+pca_imp_info <- function(
+  post_imp,
+  solver,
+  solver_chosen = NA_character_,
+  solver_probed = FALSE,
+  diag = list(
+    n_iter = 0L,
+    criterion_final = NA_real_,
+    converged = NA,
+    n_exact = 0L,
+    n_lobpcg_ok = 0L,
+    n_lobpcg_bad = 0L
+  ),
+  mean_filled_cols = integer(0),
+  mean_filled_cells = mean_filled_cells_matrix()
+) {
+  list(
+    imp_method = "pca",
+    fallback = FALSE,
+    post_imp = post_imp,
+    mean_filled_cols = mean_filled_cols,
+    mean_filled_cells = mean_filled_cells,
+    solver_requested = solver,
+    solver_chosen = solver_chosen,
+    solver_probed = solver_probed,
+    n_iter = diag$n_iter,
+    criterion_final = diag$criterion_final,
+    converged = diag$converged,
+    n_exact = diag$n_exact,
+    n_lobpcg_ok = diag$n_lobpcg_ok,
+    n_lobpcg_bad = diag$n_lobpcg_bad
+  )
+}
+
+# The result of pca_imp(): the shared constructor plus the attributes
+# only pca_imp() carries, from pca_imp_info().
+pca_imp_results <- function(obj, info) {
+  out <- new_slideimp_results(
+    obj,
+    info$imp_method,
+    fallback = info$fallback,
+    post_imp = info$post_imp,
+    mean_filled_cols = info$mean_filled_cols,
+    mean_filled_cells = info$mean_filled_cells
+  )
+  shared <- c(
+    "imp_method",
+    "fallback",
+    "post_imp",
+    "mean_filled_cols",
+    "mean_filled_cells"
+  )
+  for (nm in setdiff(names(info), shared)) {
+    attr(out, nm) <- info[[nm]]
+  }
+  out
+}
+
 #' PCA Imputation for Numeric Matrices
 #'
-#' Impute missing values in a numeric matrix using regularized or
-#' expectation-maximization (EM) PCA imputation. Supports warm-start LOBPCG with
-#' both the previous eigenblock and search direction.
+#' Impute missing values in a numeric matrix with regularized or
+#' expectation-maximization (EM) PCA imputation. The eigensolver can be LOBPCG,
+#' warm-started from the previous eigenblock and search direction.
 #'
 #' @inheritParams knn_imp
 #'
-#' @param ncp Integer. Number of principal components used to predict missing
-#'   entries.
+#' @param ncp Integer. Number of principal components used to impute missing
+#'   values.
 #' @param scale Logical. If `TRUE`, columns are scaled to unit variance.
-#' @param method Character. PCA imputation method: either `"regularized"` or
-#'   `"EM"`.
-#' @param coeff.ridge Numeric. Ridge regularization, used only when
-#'   `method = "regularized"`. Values `< 1` move toward EM PCA; values `> 1`
-#'   move toward mean imputation.
-#' @param row.w Row weights, normalized to sum to `1`. `NULL` (equal weights),
-#'   a positive numeric vector of length `nrow(obj)`, or `"n_miss"`
-#'   (down-weight rows with more missing values).
+#' @param method Character. One of `"regularized"` or `"EM"`. The PCA
+#'   imputation method.
+#' @param coeff.ridge Numeric. The ridge regularization for
+#'   `method = "regularized"`, ignored otherwise. Values below `1` move toward
+#'   EM PCA, and values above `1` move toward mean imputation.
+#' @param row.w Numeric vector, `"n_miss"`, or `NULL`. The row weights,
+#'   normalized to sum to `1`: positive values of length `nrow(obj)`,
+#'   `"n_miss"` to down-weight rows with more missing values, or `NULL` for
+#'   equal weights.
 #' @param threshold Numeric. Convergence threshold.
 #' @param seed Integer, numeric, or `NULL`. Random seed for reproducibility.
-#' @param nb.init Integer. Number of random initializations. The first
-#'   initialization is always mean imputation.
+#'   As in `missMDA::imputePCA()`, initialization `i` is seeded with
+#'   `seed * (i - 1)`. So `seed = 0` gives every random initialization the same
+#'   start, and `nb.init` then yields two distinct solves: the mean
+#'   initialization and one random one. With `nb.init > 1`, `seed` can be at
+#'   most `.Machine$integer.max %/% (nb.init - 1)`.
+#' @param nb.init Integer. Number of initializations. The first is always mean
+#'   imputation, and the others are random.
 #' @param maxiter Integer. Maximum number of iterations.
-#' @param miniter Integer. Minimum number of iterations.
-#' @param solver Character. Eigensolver: `"auto"` (default), `"exact"`, or
-#'   `"lobpcg"`. `"auto"` runs a short timed probe and picks `"lobpcg"` only
-#'   when clearly faster. Consecutive EM calls warm-start LOBPCG with both the
-#'   previous eigenblock and search direction. When `nb.init > 1`, the auto
-#'   choice from the first init is reused. See Performance tips.
-#' @param lobpcg_control A list of LOBPCG eigensolver control options, usually
-#'   created by [lobpcg_control()]. A plain named list is also accepted.
+#' @param miniter Integer. Minimum number of iterations, at most `maxiter`.
+#' @param solver Character. One of `"auto"`, `"exact"`, or `"lobpcg"`. The
+#'   eigensolver. `"auto"` uses `"exact"` for small problems and otherwise runs
+#'   a short timed probe, picking `"lobpcg"` only when it is clearly faster.
+#'   With `nb.init > 1`, the choice from the first initialization is reused.
+#'   See the PCA Performance tips section.
+#' @param lobpcg_control A list or `NULL`. LOBPCG control options, from
+#'   [lobpcg_control()] or as a plain named list, or `NULL` for the defaults.
 #'   Ignored when `solver = "exact"`.
-#' @param clamp Optional numeric vector `c(lower, upper)` bounding PCA-imputed
-#'   values (use `-Inf`/`Inf` for one-sided, `NULL` for none). E.g., `c(0, 1)`
-#'   for DNAm beta values. Observed values are not clamped.
+#' @param clamp Numeric vector of length 2 or `NULL`. The bounds
+#'   `c(lower, upper)` for PCA-imputed values, such as `c(0, 1)` for DNA
+#'   methylation beta values, or `NULL` for none. Use `-Inf` or `Inf` for a
+#'   one-sided bound. Observed values are not clamped.
 #'
-#' @returns A numeric matrix of the same dimensions as `obj`, with missing
-#' values imputed. The returned object has class `slideimp_results`.
+#' @inherit knn_imp return
 #'
 #' @details
-#' This function reimplements the PCA imputation method from the `missMDA`
+#' `pca_imp()` reimplements the PCA imputation method from the `missMDA`
 #' package by Francois Husson and Julie Josse, based on Josse and Husson (2016).
 #'
+#' A column whose observed values do not vary takes no part in PCA imputation.
+#' Column mean fill treats it like a column over `colmax`, in `post_imp` and in
+#' the `mean_filled_cols` attribute.
+#'
+#' With `subset`, the result holds only the selected columns, in the order
+#' they have in `obj`. The other columns take part in the imputation as they
+#' do without `subset`. So `subset` makes the result smaller, not the imputation
+#' faster. A name that is not in `colnames(obj)`, or a `subset` that
+#' selects no column, is an error.
+#'
+#' @inheritSection slideimp-package Column mean fill
+#'
+#' @inheritSection slideimp-package Missing values and non-finite input
+#'
 #' @section PCA Performance tips:
-#' Speed comes from three levers: `solver` (through LOBPCG with warm-start),
-#' `threshold`, and `scale`. Tune these first, then accuracy parameters
-#' (`ncp`, `coeff.ridge`) on a representative subset.
+#' Three arguments set the speed: `solver`, `threshold`, and `scale`. Tune
+#' these first, then the accuracy arguments `ncp` and `coeff.ridge`, on a
+#' representative subset.
 #'
-#' **Exact vs. LOBPCG with warm-start.** Whether `"lobpcg"` beats `"exact"`
-#' depends on size and low-rankness: `"lobpcg"` is preferred for large, approximately
-#' low-rank matrices with small `ncp`, and `"exact"` for small matrices
-#' (including `slide_imp()` windows), where it is faster and more robust.
-#' Separately, the warm-start makes each successive solve cheap: `pca_imp()`
-#' warm-starts LOBPCG with the previous eigenblock and search direction, so once
-#' imputed values stabilize, later solves converge in a few iterations. The
-#' payoff therefore grows with the number of EM iterations, independent of
-#' low-rankness. `solver = "auto"` (default) probes both and is a safe start.
+#' **Exact vs. LOBPCG.** `"lobpcg"` suits large, approximately low-rank
+#' matrices with small `ncp`. `"exact"` suits small matrices, such as
+#' `slide_imp()` windows, where it is faster. It is also more reliable: it
+#' always converges, to eigenvectors exact to machine precision, while LOBPCG
+#' stops at the tolerance set in [lobpcg_control()] and can take many
+#' iterations, or reach `maxiter`, when the eigenvalues around the `ncp`-th one
+#' are close together. The warm start makes each later LOBPCG solve cheap:
+#' `pca_imp()` starts LOBPCG from the previous eigenblock and search direction,
+#' so once the imputed values stabilize, each solve takes a few iterations. The
+#' gain grows with the number of EM iterations, whatever the rank.
+#' `solver = "auto"`, the default, chooses between the two and is a safe start.
 #'
-#' **Threshold.** The default `1e-6` is conservative; `1e-5` is often faster
-#' with very similar values.
+#' **Threshold.** The default `1e-6` is conservative. `1e-5` is often faster
+#' and gives very similar values.
 #'
-#' **Scale.** For columns on a common scale (e.g., DNAm beta values in
-#' `[0, 1]`), `scale = FALSE` can be faster and more accurate.
+#' **Scale.** For columns on a common scale, such as DNA methylation beta
+#' values in `[0, 1]`, `scale = FALSE` can be faster and more accurate.
 #'
-#' **Parallel and BLAS.** In parallel via `tune_imp()` or `group_imp()` with a
-#' multithreaded BLAS, set `pin_blas = TRUE` to avoid thread oversubscription.
-#' On Windows, the stock BLAS can be slow. Advanced users can swap in
-#' [OpenBLAS](https://github.com/david-cortes/R-openblas-in-windows).
+#' **BLAS.** On Windows, the BLAS that ships with R can be slow, and
+#' [OpenBLAS](https://github.com/david-cortes/R-openblas-in-windows) can
+#' replace it.
 #'
 #' See [Speeding up PCA imputation](https://hhp94.github.io/slideimp/articles/speeding-up-pca-imputation.html)
 #' for the full workflow.
@@ -286,15 +421,22 @@ new_lobpcg_control <- function(
 #' Multivariate Data Analysis. *Journal of Statistical Software*, 70(1), 1-31.
 #' \doi{10.18637/jss.v070.i01}
 #'
+#' @seealso
+#' * [group_imp()] to impute within feature groups.
+#' * [mipca()] for multiple imputation with PCA.
+#'
 #' @examples
 #' set.seed(123)
 #' obj <- sim_mat(10, 10)$input
 #' sum(is.na(obj))
 #' obj[1:4, 1:4]
 #'
-#' # Randomly initialize missing values 5 times. The first initialization is
-#' # mean imputation. Select `ncp` with `tune_imp()`.
+#' # Five initializations: the first is mean imputation, the other four are
+#' # random. Select `ncp` with `tune_imp()`.
 #' pca_imp(obj, ncp = 2, nb.init = 5, seed = 123)
+#'
+#' # Impute every column, but return only the first three
+#' pca_imp(obj, ncp = 2, subset = 1:3)
 #'
 #' @export
 pca_imp <- function(
@@ -313,18 +455,77 @@ pca_imp <- function(
   lobpcg_control = NULL,
   colmax = 0.9,
   post_imp = TRUE,
-  na_check = TRUE,
   clamp = NULL,
+  subset = NULL,
   .progress = FALSE
 ) {
-  # pre-conditioning
   checkmate::assert_matrix(
     obj,
-    mode = "numeric",
+    mode = "double",
     null.ok = FALSE,
     .var.name = "obj"
   )
-  check_finite(obj)
+  # the row counts only for `row.w = "n_miss"`, which pca_imp_parts()
+  # validates with the rest of `row.w`
+  scan <- col_scan(obj, var = TRUE, rows = identical(row.w, "n_miss"))
+  refuse_nonfinite(scan)
+  res <- pca_imp_parts(
+    obj = obj,
+    scan = scan,
+    ncp = ncp,
+    scale = scale,
+    method = method,
+    coeff.ridge = coeff.ridge,
+    row.w = row.w,
+    threshold = threshold,
+    seed = seed,
+    nb.init = nb.init,
+    maxiter = maxiter,
+    miniter = miniter,
+    solver = solver,
+    lobpcg_control = lobpcg_control,
+    colmax = colmax,
+    post_imp = post_imp,
+    clamp = clamp,
+    subset = subset,
+    .progress = .progress
+  )
+  pca_imp_results(fill_imp_parts(res), res$info)
+}
+
+# pca_imp() without its door, as knn_imp_parts() is knn_imp() without its
+# door: `obj` and its `scan`, with the variances, then the formals of
+# pca_imp(), and the same list returned. The scan carries the row counts
+# when the door took them; a slice's scan does not, and they are counted
+# here. The PCA part covers every eligible column, kept or not.
+pca_imp_parts <- function(
+  obj,
+  scan,
+  ncp = 2,
+  scale = TRUE,
+  method = c("regularized", "EM"),
+  coeff.ridge = 1,
+  row.w = NULL,
+  threshold = 1e-6,
+  seed = NULL,
+  nb.init = 1,
+  maxiter = 1000,
+  miniter = 5,
+  solver = c("auto", "exact", "lobpcg"),
+  lobpcg_control = NULL,
+  colmax = 0.9,
+  post_imp = TRUE,
+  clamp = NULL,
+  subset = NULL,
+  .progress = FALSE
+) {
+  # pre-conditioning
+  if (is.null(scan$var)) {
+    stop(
+      "internal error: pca_imp_parts() was given a scan without variances",
+      call. = FALSE
+    )
+  }
   checkmate::assert_int(
     ncp,
     lower = 1L,
@@ -348,45 +549,73 @@ pca_imp <- function(
   )
   checkmate::assert_number(threshold, lower = 0, .var.name = "threshold")
   checkmate::assert_int(nb.init, lower = 1, .var.name = "nb.init")
-  checkmate::assert_int(seed, null.ok = TRUE, lower = 0, .var.name = "seed")
-  if (!is.null(seed) && nb.init > 1L && seed > 2147483647L / (nb.init - 1L)) {
-    stop("`seed` too large")
-  }
+  # initialization `i` is seeded with `seed * (i - 1)` (missMDA parity, see the
+  # `@param seed` note), so the largest value ever handed to set.seed() is
+  # `seed * (nb.init - 1)`, which has to stay inside integer range.
+  checkmate::assert_int(
+    seed,
+    null.ok = TRUE,
+    lower = 0,
+    upper = .Machine$integer.max %/% max(nb.init - 1L, 1L),
+    .var.name = "seed"
+  )
   checkmate::assert_int(maxiter, lower = 1, .var.name = "maxiter")
   checkmate::assert_int(miniter, lower = 1, .var.name = "miniter")
+  # the C++ backend enforces this too, but its message names neither argument
+  # nor value.
+  if (miniter > maxiter) {
+    cli::cli_abort(c(
+      "{.arg miniter} must be less than or equal to {.arg maxiter}.",
+      "x" = "{.arg miniter} is {miniter} and {.arg maxiter} is {maxiter}."
+    ))
+  }
   # solver resolves
   solver <- match.arg(solver)
-  lobpcg_control <- new_lobpcg_control(
-    lobpcg_control,
-    ncp = ncp,
-    n = nrow(obj),
-    p = ncol(obj),
-    solver = solver
-  )
+  lobpcg_control <- new_lobpcg_control(lobpcg_control, solver = solver)
 
   lobpcg_explicit <- attr(lobpcg_control, "explicit", exact = TRUE)
   warmup_explicit <- isTRUE(lobpcg_explicit[["warmup_iters"]])
 
   checkmate::assert_number(colmax, lower = 0, upper = 1, .var.name = "colmax")
   checkmate::assert_flag(post_imp, null.ok = FALSE, .var.name = "post_imp")
-  checkmate::assert_flag(na_check, .var.name = "na_check")
   clamp <- resolve_clamp(clamp, arg = "clamp")
+  # the columns the result holds, ascending: NULL for every column. Every
+  # eligible column still takes part in the fit, since every hole in every
+  # eligible column is updated at each EM iteration and feeds the next one,
+  # so `subset` narrows what is returned, not what is computed. Its refusals
+  # name the caller, pca_imp() for a user.
+  keep <- resolve_narrow_subset(subset, obj, call = parent.frame())
+  out_cols <- if (is.null(keep)) seq_len(ncol(obj)) else keep
   checkmate::assert_flag(.progress, .var.name = ".progress")
   trace_iter <- if (isTRUE(.progress)) 10L else 0L
 
-  # per-column missingnesss
-  cmiss <- mat_miss(obj, col = TRUE, prop = FALSE)
+  # per-column missingness, from the scan
+  cmiss <- scan$n_miss
 
-  # early exit if no missingness at all
-  if (!any(cmiss > 0L)) {
-    cli::cli_inform("No missing values in input. Returning input unchanged.")
-    return(obj)
+  # early exit if no column the result holds has a hole. Those columns come
+  # back unchanged, but in the same shape as the main path's result, as
+  # @returns promises: fill_imp_parts() takes them from `obj`.
+  if (!any(cmiss[out_cols] > 0L)) {
+    if (is.null(keep)) {
+      cli::cli_inform("No missing values in input. Returning input unchanged.")
+    } else {
+      cli::cli_inform(
+        "No missing values in the {.arg subset} columns. Returning them unchanged."
+      )
+    }
+    return(list(
+      obj = obj,
+      parts = NULL,
+      keep = keep,
+      info = pca_imp_info(post_imp = post_imp, solver = solver),
+      n_miss = cmiss
+    ))
   }
 
   miss_rate <- cmiss / nrow(obj)
 
   # eligibility: below colmax and non-degenerate variance
-  obj_vars <- col_vars(obj)
+  obj_vars <- scan$var
   eligible <- miss_rate <= min(colmax, 1) &
     !(obj_vars < .Machine$double.eps | is.na(obj_vars))
 
@@ -399,10 +628,9 @@ pca_imp <- function(
   if (cap < 1L) {
     cli::cli_abort(
       c(
-        "PCA imputation is infeasible with the current data and settings.",
-        "i" = "Number of rows: {nrow(obj)}.",
-        "i" = "Number of eligible columns: {n_elig}.",
-        "i" = "Relax {.arg colmax}, remove zero-variance columns, or use more rows/columns."
+        "PCA imputation is infeasible: {.arg obj} needs at least 3 rows and 2 eligible columns.",
+        "x" = "{.arg obj} has {nrow(obj)} row{?s} and {n_elig} eligible column{?s}.",
+        "i" = "Relax {.arg colmax}, or add rows or columns."
       ),
       class = "slideimp_infeasible"
     )
@@ -413,22 +641,27 @@ pca_imp <- function(
 
     cli::cli_abort(
       c(
-        "{.arg ncp} ({ncp}) exceeds the maximum usable components ({cap}).",
+        "{.arg ncp} ({ncp}) must be at most the number of usable components ({cap}).",
         "i" = if (row_bound) {
-          "Limited by rows ({nrow(obj)}). Reduce {.arg ncp} or add more rows."
+          "The limit is the number of rows ({nrow(obj)}) minus 2. Reduce {.arg ncp} or add rows."
         } else {
-          "Limited by eligible columns ({n_elig}). Reduce {.arg ncp} or relax {.arg colmax}."
+          "The limit is the number of eligible columns ({n_elig}) minus 1. Reduce {.arg ncp} or relax {.arg colmax}."
         }
       ),
       class = "slideimp_infeasible"
     )
   }
 
-  # at least one eligible column must have missingness
-  if (!any(cmiss[eligible] > 0L)) {
+  # at least one eligible column the result holds must have missingness
+  if (!any(cmiss[out_cols][eligible[out_cols]] > 0L)) {
     cli::cli_abort(
       c(
-        "All columns with missing values are ineligible (exceed {.arg colmax} ({colmax}) or have zero variance).",
+        if (is.null(keep)) {
+          "All columns with missing values are ineligible for PCA imputation."
+        } else {
+          "All {.arg subset} columns with missing values are ineligible for PCA imputation."
+        },
+        "x" = "Each has a proportion of missing values above {.arg colmax} ({colmax}) or zero variance.",
         "i" = "Relax {.arg colmax} or remove zero-variance columns."
       ),
       class = "slideimp_infeasible"
@@ -465,17 +698,20 @@ pca_imp <- function(
   if (is.null(row.w)) {
     row.w <- rep(1, nrow(obj))
   } else if (is.character(row.w) && row.w == "n_miss") {
-    # per-row missingness without materializing any boolean subset. We
-    # purposefully scan the entire object here since for pca, we don't have the
-    # subset argument and if missingness is spreadout through all columns,
-    # obj[, eligible_idx] would materialize a full copy in RAM.
-    n_miss_per_row <- mat_miss(obj, col = FALSE, prop = FALSE)
+    # per-row missingness over every column of `obj`, eligible or not, from
+    # the scan, or counted here for a slice, whose scan cannot carry
+    # them. `subset` does not narrow it, since it narrows only the result.
+    n_miss_per_row <- scan$row_miss
+    if (is.null(n_miss_per_row)) {
+      n_miss_per_row <- col_scan(obj, rows = TRUE)$row_miss
+    }
     row.w <- 1 - (n_miss_per_row / ncol(obj))
     row.w[row.w < 1e-10] <- 1e-10
   }
 
   init_obj <- Inf
-  best_imputed <- NULL
+  best_loc <- NULL
+  best_value <- NULL
   best_diag <- NULL
 
   # solver_chosen codes:
@@ -484,6 +720,14 @@ pca_imp <- function(
   #   2 = auto had no reason/opportunity to choose. Treat as exact
   #   3 = auto chose exact
   #   4 = auto chose lobpcg
+  #
+  # only 3 and 4 are verdicts from a completed probe. `solver_chosen` below
+  # says which solver RAN, and reports "exact" for four different reasons:
+  # forced, demoted by `auto_force_exact` before the kernel was ever called,
+  # code 2, and code 3. A caller that wants to reuse the decision - as
+  # `slide_imp()` does across windows - has to be able to tell a verdict from
+  # the other three, so `solver_probed` is reported alongside it.
+  solver_probed <- FALSE
   locked_solver <- NULL
   resolved_solver_code <- if (isTRUE(auto_force_exact)) {
     0L
@@ -504,14 +748,14 @@ pca_imp <- function(
 
     res.impute <- pca_imp_internal_cpp(
       obj = obj,
-      eligible_idx = as.integer(eligible_idx - 1L),
-      ncp = ncp,
+      eligible_idx = eligible_idx - 1L,
+      ncp = as.integer(ncp),
       scale = scale,
       regularized = (method == "regularized"),
       threshold = threshold,
       init = if (i == 1L) 0L else i,
-      maxiter = maxiter,
-      miniter = miniter,
+      maxiter = as.integer(maxiter),
+      miniter = as.integer(miniter),
       row_w = row.w,
       coeff_ridge = coeff.ridge,
       solver = solver_code_i,
@@ -520,20 +764,34 @@ pca_imp <- function(
       lobpcg_maxiter = lobpcg_control$maxiter,
       trace_iter = trace_iter
     )
+    # the kernel sets no dimnames, so `loc` gets a part map's column names here.
+    dimnames(res.impute$loc) <- list(NULL, c("row", "col"))
 
     # after the auto probe, select a solver for the rest of the inits.
     if (solver == "auto" && i == 1L) {
-      chosen <- as.integer(res.impute$solver_chosen)
-      if (length(chosen) != 1L || is.na(chosen)) {
-        chosen <- 2L
-      }
+      chosen <- res.impute$solver_chosen
       locked_solver <- if (chosen %in% c(1L, 4L)) 1L else 0L
       resolved_solver_code <- locked_solver
+      solver_probed <- chosen %in% c(3L, 4L)
     }
 
+    # the kernel's mse sums the squared residual over every cell of each
+    # eligible column, holes included, before taking the holes' share back
+    # out. So a NaN or Inf at any imputed cell makes it non-finite: this is
+    # where a broken fit shows, not in the values.
     cur_obj <- res.impute$mse
+    if (!is.finite(cur_obj)) {
+      stop(
+        "slideimp internal, pca_imp: the fit's mse is not finite (",
+        cur_obj,
+        ") at initialization ",
+        i,
+        call. = FALSE
+      )
+    }
     if (cur_obj < init_obj) {
-      best_imputed <- res.impute$imputed_values
+      best_loc <- res.impute$loc
+      best_value <- res.impute$value
       init_obj <- cur_obj
       best_diag <- list(
         n_iter = res.impute$n_iter,
@@ -547,44 +805,88 @@ pca_imp <- function(
   }
 
   # column/row indices returned by backend are already original-matrix indices.
-  if (is.null(best_imputed) || nrow(best_imputed) == 0L) {
-    cli::cli_abort("Internal error: PCA imputation produced no imputed values.")
-  }
-
-  if (!is.null(clamp)) {
-    best_imputed[, 3] <- pmin(
-      pmax(best_imputed[, 3], clamp[1L]),
-      clamp[2L]
+  if (is.null(best_value) || length(best_value) == 0L) {
+    cli::cli_abort(
+      "slideimp internal, pca_imp: the fit produced no imputed values"
     )
   }
 
-  imp_indices <- cbind(
-    as.integer(best_imputed[, 1]),
-    as.integer(best_imputed[, 2])
-  )
-  obj[imp_indices] <- best_imputed[, 3]
-
-  if (post_imp) {
-    obj <- mean_imp_col(obj)
+  # the non-convergence warning is raised here, not in the kernel: a warning
+  # from C++ can longjmp out of the EM frame (options(warn = 2), a restarting
+  # handler) and skip its destructors. It is also one warning per call, for
+  # the restart whose values were kept.
+  if (!isTRUE(best_diag$converged)) {
+    cli::cli_warn(c(
+      "Stopped after {maxiter} iteration{?s} without converging.",
+      "i" = "Final criterion {signif(best_diag$criterion_final, 3)} is above {.arg threshold} ({threshold}).",
+      "i" = "Increase {.arg maxiter} or relax {.arg threshold}."
+    ))
   }
 
-  solver_chosen <- if (resolved_solver_code == 1L) "lobpcg" else "exact"
+  if (!is.null(clamp)) {
+    best_value <- pmin(pmax(best_value, clamp[1L]), clamp[2L])
+  }
 
-  out <- new_slideimp_results(
-    obj,
-    "pca",
-    fallback = FALSE,
+  # three parts, which together cover every column the result holds. The PCA
+  # part is the kernel's `loc` and `value`: the eligible columns and every
+  # hole in them, `loc` an integer matrix with columns `row` and `col` in the
+  # input's 1-based numbering, in the column-major order the part's validator
+  # checks. With `subset`, the door cuts it to the kept
+  # columns. The other two are the ineligible columns the result holds: those
+  # with a hole, under `post_imp` each hole set to its column mean and
+  # otherwise left NA, and those without, a part with nothing to fill. No
+  # ineligible column is all NA, since the door refuses one
+  # (refuse_nonfinite()), so each has a mean. No part holds NA, as the mse check above guarantees for the
+  # kernel's values.
+  # `eligible` comes from the scan, which carries no names, so these are
+  # plain indices, as parts take.
+  pca_part <- new_part(
+    cols = eligible_idx,
+    map = best_loc,
+    values = best_value,
+    kind = "pca"
+  )
+  rm(best_loc, best_value)
+
+  # the ineligible columns the result holds. The PCA part keeps every
+  # eligible column, kept or not, and the door cuts it to `keep`.
+  mean_cols <- which(!eligible)
+  if (!is.null(keep)) {
+    mean_cols <- intersect(mean_cols, keep)
+  }
+  holed_cols <- mean_cols[cmiss[mean_cols] > 0L]
+  # The ineligible columns with a hole are one part, filled under `post_imp`
+  # and `left_na` without it, so a `left_na` part names only columns that
+  # keep a hole (check_parts()). Those with none are a part with nothing to
+  # fill, so fallback_part() copies only the columns it fills.
+  mean_parts <- list(
+    if (post_imp) {
+      fallback_part(obj, holed_cols, "mean")
+    } else {
+      new_part(cols = holed_cols, kind = "mean", left_na = TRUE)
+    },
+    new_part(cols = setdiff(mean_cols, holed_cols), kind = "mean")
+  )
+  parts <- c(list(pca_part), mean_parts)
+  rm(pca_part, mean_parts)
+
+  info <- pca_imp_info(
     post_imp = post_imp,
-    na_check = na_check
+    solver = solver,
+    solver_chosen = if (resolved_solver_code == 1L) "lobpcg" else "exact",
+    solver_probed = solver_probed,
+    diag = best_diag,
+    # what `post_imp` set to a column mean: the ineligible columns that had a
+    # hole, numbered as the result's columns. `mean_filled_cells` keeps its
+    # empty default, since the PCA part fills every hole of its columns.
+    mean_filled_cols = if (!post_imp) {
+      integer(0)
+    } else if (is.null(keep)) {
+      holed_cols
+    } else {
+      match(holed_cols, keep)
+    }
   )
 
-  attr(out, "solver_requested") <- solver
-  attr(out, "solver_chosen") <- solver_chosen
-  attr(out, "n_iter") <- best_diag$n_iter
-  attr(out, "criterion_final") <- best_diag$criterion_final
-  attr(out, "converged") <- best_diag$converged
-  attr(out, "n_exact") <- best_diag$n_exact
-  attr(out, "n_lobpcg_ok") <- best_diag$n_lobpcg_ok
-  attr(out, "n_lobpcg_bad") <- best_diag$n_lobpcg_bad
-  return(out)
+  list(obj = obj, parts = parts, keep = keep, info = info, n_miss = cmiss)
 }

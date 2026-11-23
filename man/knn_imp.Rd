@@ -13,64 +13,135 @@ knn_imp(
   post_imp = TRUE,
   subset = NULL,
   dist_pow = 0,
-  na_check = TRUE,
   .progress = FALSE
 )
 }
 \arguments{
-\item{obj}{A numeric matrix with samples in rows and features in columns.}
+\item{obj}{A double matrix. Samples are in rows and features in columns.}
 
-\item{k}{Integer. Number of nearest neighbors to use for K-NN imputation.}
+\item{k}{Integer. Number of nearest neighbors for K-NN imputation.}
 
-\item{colmax}{Numeric scalar between \code{0} and \code{1}. Columns with a missing-data
-proportion greater than \code{colmax} are excluded from the main imputation
-method. Excluded columns are left unchanged unless \code{post_imp = TRUE}, in
-which case remaining missing values are replaced by column means when
-possible.}
+\item{colmax}{Numeric scalar between \code{0} and \code{1}. Columns with a proportion
+of missing values greater than \code{colmax} take no part in the imputation, as
+described under Column mean fill.}
 
-\item{method}{Character. K-NN imputation distance method: either \code{"euclidean"}
-or \code{"manhattan"}.}
+\item{method}{Character. One of \code{"euclidean"} or \code{"manhattan"}. The distance
+used to find neighbors, as defined under Details.}
 
-\item{cores}{Integer. Number of cores to use for K-NN imputation. Defaults
-to \code{1}.}
+\item{cores}{Integer. Number of cores for K-NN imputation. Defaults to \code{1}.}
 
-\item{post_imp}{Logical. If \code{TRUE}, replace missing values remaining after
-the main imputation method with column means when possible.}
+\item{post_imp}{Logical. If \code{TRUE}, column means replace the missing values
+that remain after imputation, as described under Column mean fill.}
 
-\item{subset}{Optional character or integer vector specifying columns to
-target for imputation. If \code{NULL}, all eligible columns are targeted.}
+\item{subset}{Optional character or integer vector. The columns to impute
+and return, by name or by number, or \code{NULL} for every column. Defaults to
+\code{NULL}.}
 
 \item{dist_pow}{Numeric. Power used to penalize more distant neighbors in
-the weighted average. \code{dist_pow = 0} gives an unweighted average of the
-nearest neighbors.}
-
-\item{na_check}{Logical. If \code{TRUE}, check whether the returned matrix still
-contains missing values.}
+the weighted average, where \code{0} gives an unweighted average. The weighting
+rule is given under Details in \code{\link[=knn_imp]{knn_imp()}}.}
 
 \item{.progress}{Logical. If \code{TRUE}, show imputation progress.}
 }
 \value{
-A numeric matrix of the same dimensions as \code{obj}, with missing
-values imputed. The returned object has class \code{slideimp_results}.
+A \code{slideimp_results} object: a numeric matrix with the rows of
+\code{obj} and the columns that \code{subset} selects, with missing values imputed.
 }
 \description{
-Impute missing values in a numeric matrix using full K-nearest neighbors (K-NN).
+Impute missing values in a numeric matrix with K-nearest neighbors (K-NN),
+searching the whole matrix for neighbors.
 }
 \details{
-\code{knn_imp()} performs imputation column-wise, treating rows as observations
-and columns as features.
+\code{knn_imp()} imputes each column from the \code{k} columns nearest to it, found by
+an exact brute-force search. The distance between the target column and a
+candidate column is a mean over the rows where both are observed. Candidates
+that share different numbers of rows with the target therefore stay
+comparable. \code{method = "euclidean"} averages squared differences and takes no
+square root. \code{method = "manhattan"} averages absolute differences.
 
-Nearest neighbors are found using brute-force K-NN.
+A candidate that shares no observed row with the target is never a
+neighbor. A column can therefore have fewer than \code{k} neighbors, or none, and
+K-NN does not impute a column with none.
 
-When \code{dist_pow > 0}, imputed values are computed as distance-weighted
-averages. Weights are inverse distances raised to the power of \code{dist_pow}.
+A column with few observed values can be selected as a neighbor because it
+agrees with the target on one or two shared rows. Such a neighbor has no
+value at most of the rows to impute. A lower \code{colmax} keeps these columns
+out of the neighbors.
+
+When \code{dist_pow > 0}, imputed values are distance-weighted averages of the
+selected neighbors: a neighbor at distance \code{d} is weighted
+\code{(d_min / d)^dist_pow}, where \code{d_min} is the smallest positive distance
+among the neighbors chosen for that column. \code{d_min} cancels out of the
+average and only keeps the largest weight at \code{1}.
+
+Under \code{"euclidean"}, \code{d} is a mean squared difference, so weighting by
+\code{1 / d^dist_pow} equals weighting by \code{1 / d^(2 * dist_pow)} on the usual,
+square-rooted euclidean distance. A \code{dist_pow} tuned for one \code{method}
+therefore does not carry over to the other.
+
+Neighbors are selected once per column. A neighbor that is missing at a row
+drops out of the average for that row, which is taken over the neighbors
+observed there. K-NN does not impute a row where none of the neighbors is
+observed.
+
+With \code{dist_pow > 0}, a neighbor at distance zero agrees with the target on
+every shared row and would take an infinite weight. It takes weight \code{1}
+instead, and the other neighbors take a small positive weight. Exact
+matches therefore dominate the average, but the other neighbors stay in it.
+When every neighbor is at distance zero, all weights are \code{1}.
+
+The result holds the \code{subset} columns in the order they have in \code{obj}.
+Every column within \code{colmax} can still be a neighbor, in \code{subset} or not. A
+name that is not in \code{colnames(obj)}, or a \code{subset} that selects no column,
+is an error.
 }
 \section{K-NN performance optimization}{
 
 \itemize{
 \item Use \code{subset} when only specific columns need imputation.
-\item Use grouped or sliding-window imputation for very large matrices.
+\item Use \code{\link[=group_imp]{group_imp()}} or \code{\link[=slide_imp]{slide_imp()}} for very large matrices.
 }
+}
+
+\section{Column mean fill}{
+
+
+A column with a proportion of missing values greater than \code{colmax} takes no
+part in the imputation. The method neither uses the column to impute other
+columns nor imputes it.
+
+With \code{post_imp = TRUE}, column means replace the missing values that remain
+after the method has run. Two kinds of missing value can remain: the missing
+values of the columns that took no part, and the cells for which the method
+found no value. Each column mean is the mean of the column's observed
+values. With \code{post_imp = FALSE}, both kinds stay missing.
+
+The result records what the column means replaced, in two attributes:
+\itemize{
+\item \code{mean_filled_cols}: an integer vector with the index, in the result, of
+each column that took no part and was filled.
+\item \code{mean_filled_cells}: an integer matrix with the columns \code{row} and \code{col},
+one row for each cell that the method could not impute and that was
+filled.
+}
+
+Both attributes are empty when no column mean was used. \code{print()} reports
+them when they are not empty.
+}
+
+\section{Missing values and non-finite input}{
+
+
+\code{obj} must be a double matrix. An integer or logical matrix is rejected,
+not converted. Convert one with \code{storage.mode(obj) <- "double"}.
+
+\code{NA} and \code{NaN} are both treated as missing. The package does not
+distinguish between them.
+
+\code{Inf} and \code{-Inf} are rejected on entry, and so is a column with no
+observed values (every cell \code{NA} or \code{NaN}). Locate them with
+\code{which(is.infinite(obj), arr.ind = TRUE)} and
+\code{which(colSums(!is.na(obj)) == 0)}.
 }
 
 \examples{
@@ -79,8 +150,11 @@ obj <- sim_mat(20, 20, perc_col_na = 1)$input
 sum(is.na(obj))
 
 # Select `k` with `tune_imp()`.
-result <- knn_imp(obj, k = 10, .progress = FALSE)
+result <- knn_imp(obj, k = 10)
 result
+
+# Impute and return only the first three columns
+knn_imp(obj, k = 10, subset = 1:3)
 
 }
 \references{
@@ -88,4 +162,7 @@ Troyanskaya O, Cantor M, Sherlock G, Brown P, Hastie T, Tibshirani R,
 Botstein D, Altman RB (2001). Missing value estimation methods for DNA
 microarrays. \emph{Bioinformatics}, 17(6), 520-525.
 \doi{10.1093/bioinformatics/17.6.520}
+}
+\seealso{
+\code{\link[=group_imp]{group_imp()}} to impute within feature groups.
 }

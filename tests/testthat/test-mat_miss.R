@@ -1,3 +1,5 @@
+skip_on_cran()
+
 test_that("mat_miss counts NAs correctly", {
   m <- matrix(
     c(1, NA, 3, NA, NA, 6),
@@ -13,7 +15,7 @@ test_that("mat_miss counts NAs correctly", {
 
 test_that("mat_miss handles edge cases", {
   # no NAs
-  m1 <- matrix(1:6, 2, 3)
+  m1 <- matrix(as.double(1:6), 2, 3)
   expect_equal(unname(mat_miss(m1)), c(0, 0, 0))
 
   # all NAs
@@ -25,10 +27,29 @@ test_that("mat_miss handles edge cases", {
   expect_equal(unname(mat_miss(m3)), c(1, 1))
 })
 
+test_that("mat_miss returns integer counts and double proportions", {
+  m <- matrix(c(1, NA, 3, NA, NA, 6), nrow = 2)
+
+  expect_type(mat_miss(m), "integer")
+  expect_type(mat_miss(m, col = FALSE), "integer")
+  expect_type(mat_miss(m, prop = TRUE), "double")
+  expect_type(mat_miss(m, col = FALSE, prop = TRUE), "double")
+})
+
+test_that("mat_miss does not count Inf as missing", {
+  m <- matrix(c(1, Inf, NA, NaN, -Inf, 6), nrow = 3)
+  expect_equal(unname(mat_miss(m)), c(1L, 1L))
+})
+
 test_that("mat_miss validates inputs", {
   expect_error(mat_miss(data.frame(x = 1)), "matrix")
-  expect_error(mat_miss(matrix("a", 1, 1)), "numeric")
-  expect_error(mat_miss(matrix(1, 1, 1), col = "yes"))
+  expect_error(mat_miss(matrix("a", 1, 1)), "Must store doubles", fixed = TRUE)
+  expect_error(mat_miss(matrix(1:2, 1, 2)), "Must store doubles", fixed = TRUE)
+  expect_error(
+    mat_miss(matrix(1, 1, 1), col = "yes"),
+    "Assertion on 'col' failed",
+    fixed = TRUE
+  )
 })
 
 test_that("mat_miss agrees with base R on sim_mat output", {
